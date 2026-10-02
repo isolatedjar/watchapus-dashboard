@@ -35,6 +35,7 @@ function history() {
   });
   return {
     hostname: "lean-host",
+    banner: "Lean build server",
     now,
     startedAt: now - 1800000,
     sampleIntervalMs: 10000,
@@ -45,7 +46,7 @@ function history() {
 test("shows stacked memory, process counts and synchronized inspection", async ({ page }) => {
   await page.route("**/api/history", (route) => route.fulfill({ json: history() }));
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Memory, in perspective." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Lean build server" })).toBeVisible();
   await expect(page.getByText("Live", { exact: true })).toBeVisible();
   const chart = page.getByRole("img", { name: "Stacked RAM usage over the last 30 minutes" });
   await expect(chart.locator("[data-layer]")).toHaveCount(6);

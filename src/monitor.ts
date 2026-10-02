@@ -53,6 +53,7 @@ export class Monitor {
     this._prune(now);
     return {
       hostname: hostname(),
+      banner: process.env.WD_BANNER ?? process.env.HOST ?? hostname(),
       now,
       startedAt: this._startedAt,
       sampleIntervalMs: SAMPLE_INTERVAL_MS,

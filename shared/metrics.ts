@@ -36,6 +36,7 @@ export const zSample = z.object({
 export type Sample = z.infer<typeof zSample>;
 export const zSnapshot = z.object({
   hostname: z.string(),
+  banner: z.string(),
   now: z.number(),
   startedAt: z.number(),
   sampleIntervalMs: z.number().positive(),

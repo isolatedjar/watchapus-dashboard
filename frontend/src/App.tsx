@@ -83,7 +83,7 @@ export default function App() {
       <header>
         <div>
           <p className="eyebrow">WATCHAPUS / HOST OBSERVATORY</p>
-          <h1>Memory, in perspective.</h1>
+          <h1>{snapshot?.banner ?? "Connecting to host"}</h1>
           <p className="subtitle">
             {snapshot?.hostname ?? "Connecting to host"} <span>·</span> All users, all Lean &amp;
             Lake processes
