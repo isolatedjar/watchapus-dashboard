@@ -44,10 +44,10 @@ export async function collect(procRoot = "/proc"): Promise<Measurement> {
     other: 0,
     vanished: 0,
     groups: {
-      lake: { count: 0, rss: 0, pss: 0, filePss: 0, nonFilePss: 0 },
-      watchdog: { count: 0, rss: 0, pss: 0, filePss: 0, nonFilePss: 0 },
-      worker: { count: 0, rss: 0, pss: 0, filePss: 0, nonFilePss: 0 },
-      otherLean: { count: 0, rss: 0, pss: 0, filePss: 0, nonFilePss: 0 },
+      lake: { count: 0, rss: 0, pss: 0, filePss: 0, nonFilePss: 0, nonFileStats: null },
+      watchdog: { count: 0, rss: 0, pss: 0, filePss: 0, nonFilePss: 0, nonFileStats: null },
+      worker: { count: 0, rss: 0, pss: 0, filePss: 0, nonFilePss: 0, nonFileStats: null },
+      otherLean: { count: 0, rss: 0, pss: 0, filePss: 0, nonFilePss: 0, nonFileStats: null },
     },
   };
   const pids = (await readdir(procRoot)).filter((pid) => /^\d+$/.test(pid));
@@ -78,7 +78,13 @@ export async function collect(procRoot = "/proc"): Promise<Measurement> {
         values.rss += required(fields, "Rss");
         values.pss += pss;
         values.filePss += filePss;
-        values.nonFilePss += pss - filePss;
+        const nonFile = pss - filePss;
+        values.nonFilePss += nonFile;
+        values.nonFileStats = {
+          average: values.nonFilePss / values.count,
+          min: Math.min(values.nonFileStats?.min ?? nonFile, nonFile),
+          max: Math.max(values.nonFileStats?.max ?? nonFile, nonFile),
+        };
       } catch (error) {
         if (isGone(error)) {
           result.vanished++;
@@ -105,8 +111,10 @@ export async function collect(procRoot = "/proc"): Promise<Measurement> {
     result.filePss += result.groups[group].filePss;
     processPss += result.groups[group].pss;
   }
-  result.other = result.used - processPss;
-  if (result.other < 0 || result.used < 0)
+  // Lake and other Lean file mappings remain in filePss; their non-file RAM joins Other.
+  result.other =
+    result.used - processPss + result.groups.otherLean.nonFilePss + result.groups.lake.nonFilePss;
+  if (processPss > result.used || result.used < 0)
     throw new Error("Inconsistent snapshot: process PSS exceeds used RAM; sample discarded.");
   return result;
 }

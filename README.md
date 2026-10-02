@@ -64,14 +64,24 @@ Each stacked slice totals **MemTotal − MemFree**, including page cache and
 excluding swap. All quantities in the API and logs are **bytes**, not KiB. The
 display uses GiB (2³⁰ bytes).
 
-| Layer                     | Measurement                                        |
-| ------------------------- | -------------------------------------------------- |
-| File-backed · Lean + Lake | Sum of `Pss_File` for all selected processes       |
-| Lake · non-file           | Sum of `Pss − Pss_File` for all `lake` processes   |
-| Watchdogs · non-file      | Same, for `lean --server`                          |
-| File workers · non-file   | Same, for `lean --worker`                          |
-| Other Lean · non-file     | Same, for other `lean` processes, including builds |
-| Other RAM + cache         | `MemTotal − MemFree − sum(all selected Pss)`       |
+| Layer                     | Measurement                                       |
+| ------------------------- | ------------------------------------------------- |
+| File-backed · Lean + Lake | Sum of `Pss_File` for all Lean and Lake processes |
+| Watchdogs · non-file      | Sum of `Pss − Pss_File` for `lean --server`       |
+| File workers · non-file   | Sum of `Pss − Pss_File` for `lean --worker`       |
+| Other RAM + cache         | `MemTotal − MemFree` minus the three layers above |
+
+Other RAM includes Lake and other Lean non-file memory. Their file-backed
+mappings still contribute to the yellow file-backed layer. Raw measurements
+for all four process categories remain available in the API, logs and table.
+
+The middle graph shows **average, minimum and maximum non-file memory per
+process** across the watchdogs and workers alive at each sample (not a moving
+average over time). Blue means watchdogs; orange means file workers. Average
+is solid, minimum dotted, maximum dashed. An empty group has null statistics
+and appears as a gap. The bottom graph shows **Lean LSP processes**: separate
+watchdog and worker counts, including zero when none are present. All three
+graphs use straight segments between samples, with no smoothing.
 
 `Pss_File` directly measures the proportionally attributed resident pages of
 file-backed mappings. It includes `.olean`, other Lean data files, executable
@@ -104,12 +114,14 @@ stale-data message. Long pauses and failed samples break graph lines.
 ## Capturing logs
 
 The Node process emits newline-delimited JSON to stdout. Every completed round
-emits `event: "sample"` with `version: 1`, a Unix-millisecond `timestamp`,
+emits `event: "sample"` with `version: 2`, a Unix-millisecond `timestamp`,
 `durationMs`, `measurement`, and `error`. Successful measurements contain
 `total`, `free`, `used`, `filePss`, `other`, `vanished`, and each category's
-`count`, `rss`, `pss`, `filePss`, and `nonFilePss`. Failures have
+`count`, `rss`, `pss`, `filePss`, `nonFilePss`, and `nonFileStats` (`average`,
+`min`, `max` in bytes, or null for an empty group). Failures have
 `measurement: null` and a diagnostic `error`; a successful sample has
-`error: null`. Startup emits `event: "listening"`.
+`error: null`. Startup emits `event: "listening"`. Log version 2 folds Lake
+and other Lean non-file memory into `other`; version 1 excluded it.
 
 To capture clean NDJSON, invoke Node directly rather than capturing npm's
 script banners:

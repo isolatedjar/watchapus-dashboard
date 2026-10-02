@@ -7,7 +7,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535)
 const monitor = new Monitor();
 const app = createApp(monitor, process.env.NODE_ENV === "production");
 const server = app.listen(port, process.env.HOST ?? "0.0.0.0", () => {
-  process.stdout.write(`${JSON.stringify({ version: 1, event: "listening", port })}\n`);
+  process.stdout.write(`${JSON.stringify({ version: 2, event: "listening", port })}\n`);
   monitor.start();
 });
 for (const signal of ["SIGINT", "SIGTERM"]) {

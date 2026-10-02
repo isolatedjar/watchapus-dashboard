@@ -66,17 +66,23 @@ describe("Linux memory accounting", () => {
       pss: 1500 * 1024,
       filePss: 1000 * 1024,
       nonFilePss: 500 * 1024,
+      nonFileStats: { average: 250 * 1024, min: 200 * 1024, max: 300 * 1024 },
     });
     expect(sample.filePss).toBe(1300 * 1024);
-    expect(sample.other).toBe(5700 * 1024);
+    expect(sample.other).toBe(6000 * 1024);
     expect(sample.used).toBe(8000 * 1024);
     expect(
       sample.filePss +
         sample.other +
-        Object.values(sample.groups).reduce((n, g) => n + g.nonFilePss, 0),
+        [sample.groups.watchdog, sample.groups.worker].reduce((n, g) => n + g.nonFilePss, 0),
     ).toBe(sample.used);
     expect(sample.groups.lake.count).toBe(1);
     expect(sample.groups.watchdog.count).toBe(1);
+    expect(sample.groups.watchdog.nonFileStats).toEqual({
+      average: 200 * 1024,
+      min: 200 * 1024,
+      max: 200 * 1024,
+    });
     expect(sample.groups.otherLean.count).toBe(1);
   });
   it("tolerates disappearing processes without losing the host sample", async () => {
@@ -85,6 +91,7 @@ describe("Linux memory accounting", () => {
     const sample = await collect(root);
     expect(sample.vanished).toBe(1);
     expect(sample.other).toBe(sample.used);
+    expect(sample.groups.worker.nonFileStats).toBeNull();
   });
   it("fails visibly on missing accounting fields rather than inventing zero usage", async () => {
     const root = await fixture();

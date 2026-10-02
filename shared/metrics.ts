@@ -11,6 +11,7 @@ const groupMetrics = z.object({
   pss: bytes,
   filePss: bytes,
   nonFilePss: bytes,
+  nonFileStats: z.object({ average: bytes, min: bytes, max: bytes }).nullable(),
 });
 export const zMeasurement = z.object({
   total: bytes,

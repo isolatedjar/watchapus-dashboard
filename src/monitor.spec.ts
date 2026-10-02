@@ -5,7 +5,7 @@ import { HISTORY_MS, type Measurement, SAMPLE_INTERVAL_MS, zSnapshot } from "../
 import { createApp } from "./app.ts";
 import { Monitor } from "./monitor.ts";
 
-const emptyGroup = { count: 0, rss: 0, pss: 0, filePss: 0, nonFilePss: 0 };
+const emptyGroup = { count: 0, rss: 0, pss: 0, filePss: 0, nonFilePss: 0, nonFileStats: null };
 const measurement: Measurement = {
   total: 100,
   free: 20,

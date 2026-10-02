@@ -7,7 +7,7 @@ import {
   type Snapshot,
   zSnapshot,
 } from "../../shared/metrics.ts";
-import { Chart, countSeries, gib, memorySeries, time } from "./chart.tsx";
+import { Chart, countSeries, gib, memorySeries, processMemorySeries, time } from "./chart.tsx";
 
 export default function App() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -56,6 +56,16 @@ export default function App() {
   const stale = latest && now - latest.timestamp > interval * 2.5;
   const failure = error ?? latest?.error ?? (stale ? "No new samples from the collector." : null);
   const maxMemory = Math.max(2 ** 30, ...samples.map((s) => s.measurement?.total ?? 0));
+  const maxProcessMemory =
+    Math.max(
+      2 ** 28,
+      ...samples.map((s) =>
+        Math.max(
+          s.measurement?.groups.watchdog.nonFileStats?.max ?? 0,
+          s.measurement?.groups.worker.nonFileStats?.max ?? 0,
+        ),
+      ),
+    ) * 1.05;
   const maxCount = Math.max(
     4,
     Math.ceil(
@@ -81,60 +91,21 @@ export default function App() {
   return (
     <main>
       <header>
-        <div>
-          <p className="eyebrow">WATCHAPUS / HOST OBSERVATORY</p>
-          <h1>{snapshot?.banner ?? "Connecting to host"}</h1>
-          <p className="subtitle">
-            {snapshot?.hostname ?? "Connecting to host"} <span>·</span> All users, all Lean &amp;
-            Lake processes
-          </p>
-        </div>
-        <div className="status-block">
-          <span className={`status ${failure ? "bad" : ""}`}>
-            <i />
-            {failure ? "Collection interrupted" : latest ? "Live" : "Waiting for first sample"}
-          </span>
-          <p>
-            Last 30 minutes <span>·</span> Every {interval / 1000}s
-          </p>
-        </div>
+        <h1>{snapshot?.banner ?? "Connecting to host"}</h1>
+        <span className={`status ${failure ? "bad" : ""}`}>
+          <i />
+          {failure ? "Collection interrupted" : latest ? "Live" : "Waiting for first sample"}
+        </span>
       </header>
       {failure && (
         <div role="alert" className="alert">
           {failure} Data is retained; missing samples appear as gaps.
         </div>
       )}
-      <section className="stats" aria-label="Selected sample totals">
-        <div>
-          <span>RAM in use · incl. cache</span>
-          <strong>{m ? gib(m.used) : "—"}</strong>
-          <small>
-            {m
-              ? `${((100 * m.used) / m.total).toFixed(1)}% of ${gib(m.total)} physical RAM`
-              : "Waiting for a valid sample"}
-          </small>
-        </div>
-        <div>
-          <span>Lean + Lake · file-backed</span>
-          <strong className="file-color">{m ? gib(m.filePss) : "—"}</strong>
-          <small>Proportional resident file mappings</small>
-        </div>
-        <div>
-          <span>Watchdogs</span>
-          <strong className="watchdog-color">{m?.groups.watchdog.count ?? "—"}</strong>
-          <small>lean --server</small>
-        </div>
-        <div>
-          <span>File workers</span>
-          <strong className="worker-color">{m?.groups.worker.count ?? "—"}</strong>
-          <small>lean --worker</small>
-        </div>
-      </section>
       <section className="panel" aria-labelledby="memory-title">
         <div className="panel-heading">
           <div>
             <h2 id="memory-title">Physical memory</h2>
-            <p>Every vertical slice totals used RAM, including page cache.</p>
           </div>
           <span className="tag">STACKED · GiB</span>
         </div>
@@ -142,10 +113,11 @@ export default function App() {
           {...chartProps}
           series={memorySeries}
           stacked
+          unit="bytes"
           max={maxMemory}
           label="Stacked RAM usage over the last 30 minutes"
         />
-        <div className="legend">
+        <div className="legend memory-legend">
           {memorySeries.map((s) => (
             <span key={s.label}>
               <i style={{ background: s.color }} />
@@ -155,11 +127,47 @@ export default function App() {
           ))}
         </div>
       </section>
+      <section className="panel" aria-labelledby="process-memory-title">
+        <div className="panel-heading">
+          <h2 id="process-memory-title">Memory per LSP process</h2>
+          <span className="tag">NON-FILE · GiB</span>
+        </div>
+        <Chart
+          {...chartProps}
+          series={processMemorySeries}
+          stacked={false}
+          unit="bytes"
+          max={maxProcessMemory}
+          label="Average, minimum and maximum non-file memory per watchdog and file worker over the last 30 minutes"
+        />
+        <div className="legend process-memory-legend">
+          {processMemorySeries.map((s) => {
+            const value = m ? s.value(m) : null;
+            return (
+              <span key={s.label}>
+                <svg className="line-key" viewBox="0 0 30 8" aria-hidden="true">
+                  <line
+                    x1="1"
+                    y1="4"
+                    x2="29"
+                    y2="4"
+                    stroke={s.color}
+                    strokeWidth="2"
+                    strokeDasharray={s.dash}
+                    strokeLinecap={s.dash === "1 5" ? "round" : "butt"}
+                  />
+                </svg>
+                {s.label}
+                <b>{value === null ? "—" : gib(value)}</b>
+              </span>
+            );
+          })}
+        </div>
+      </section>
       <section className="panel" aria-labelledby="process-title">
         <div className="panel-heading">
           <div>
-            <h2 id="process-title">Active processes</h2>
-            <p>Independent counts of watchdogs and file workers across the host.</p>
+            <h2 id="process-title">Lean LSP processes</h2>
           </div>
           <span className="tag">PROCESSES</span>
         </div>
@@ -167,6 +175,7 @@ export default function App() {
           {...chartProps}
           series={countSeries}
           stacked={false}
+          unit="count"
           max={maxCount}
           label="Watchdog and file worker process counts over the last 30 minutes"
         />
@@ -194,15 +203,21 @@ export default function App() {
         <summary>Memory accounting &amp; raw process measurements</summary>
         <p>
           The yellow layer is <code>Pss_File</code> across all Lean and Lake processes: resident
-          file-backed mappings, including .olean files, executables and libraries. Each remaining
-          process layer is <code>Pss − Pss_File</code> (anonymous and shared-memory mappings).
-          Shared pages are proportionally attributed, never added once per process.
+          file-backed mappings, including .olean files, executables and libraries. Each
+          watchdog/worker layer is <code>Pss − Pss_File</code> (anonymous and shared-memory
+          mappings). Shared pages are proportionally attributed, never added once per process.
         </p>
         <p>
-          Other RAM is <code>MemTotal − MemFree − Σ process PSS</code>. It includes other processes,
-          kernel memory and the remaining page cache. Swap is excluded. Raw RSS below is diagnostic
-          only and is not added to the stack. Measurements are sequential snapshots, not an atomic
-          host-wide census.
+          Other RAM is total used RAM minus the file-backed, watchdog non-file and worker non-file
+          layers. It includes Lake and other Lean non-file memory, other processes, kernel memory
+          and the remaining page cache. Swap is excluded. Raw RSS below is diagnostic only and is
+          not added to the stack. Measurements are sequential snapshots, not an atomic host-wide
+          census.
+        </p>
+        <p>
+          The per-process chart summarizes non-file memory across the watchdogs and workers alive at
+          each sample: solid average, dotted minimum, dashed maximum. An empty group has no memory
+          statistic and appears as a gap, while its process count is zero.
         </p>
         <div className="table-scroll">
           <table>
@@ -240,7 +255,7 @@ export default function App() {
         </div>
       </details>
       <footer>
-        <span>Hover over either chart to inspect a sample.</span>
+        <span>Hover over any chart to inspect a sample.</span>
         <span>History held in memory · resets on server restart · times shown locally</span>
       </footer>
     </main>

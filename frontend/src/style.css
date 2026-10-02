@@ -21,14 +21,14 @@ body {
 main {
   max-width: 1500px;
   margin: auto;
-  padding: 38px 42px 24px;
+  padding: 19px 21px 12px;
 }
 header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 24px;
-  margin-bottom: 30px;
+  margin-bottom: 15px;
 }
 h1 {
   font-size: 30px;
@@ -44,35 +44,13 @@ h2 {
 p {
   margin: 0;
 }
-.eyebrow {
-  color: #a5adbb;
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 2.2px;
-}
-.subtitle,
-.status-block p {
-  font-size: 12px;
-  color: #9da6b6;
-}
-.subtitle span,
-.status-block p span {
-  margin: 0 9px;
-  color: #606b7d;
-}
-.status-block {
-  text-align: right;
-}
-.status-block p {
-  margin-top: 14px;
-}
 .status {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   border: 1px solid #30443b;
   border-radius: 5px;
-  padding: 6px 11px;
+  padding: 3px 5.5px;
   color: #9dcdb0;
   font-size: 12px;
   background: #18251e;
@@ -91,58 +69,18 @@ p {
 .status.bad i {
   background: #edbc7f;
 }
-.stats {
-  display: grid;
-  grid-template-columns: 1.3fr 1.3fr 1fr 1fr;
-  gap: 1px;
-  background: #2b3039;
-  border: 1px solid #2b3039;
-  border-radius: 7px;
-  overflow: hidden;
-  margin-bottom: 22px;
-}
-.stats > div {
-  background: #171a20;
-  padding: 20px 24px;
-}
-.stats span {
-  display: block;
-  color: #b4bcc9;
-  font-size: 12px;
-}
-.stats strong {
-  display: block;
-  font-size: 29px;
-  font-weight: 500;
-  letter-spacing: -0.8px;
-  margin: 9px 0 5px;
-  font-variant-numeric: tabular-nums;
-}
-.stats small {
-  color: #858fa0;
-  font-size: 11px;
-}
-.file-color {
-  color: #d5bb35;
-}
-.watchdog-color {
-  color: #619dec;
-}
-.worker-color {
-  color: #ef9c46;
-}
 .panel {
   background: #171a20;
   border: 1px solid #2b3039;
   border-radius: 7px;
-  margin-top: 18px;
+  margin-top: 9px;
   overflow: hidden;
 }
 .panel-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 21px 24px 15px;
+  padding: 10.5px 12px 7.5px;
   gap: 15px;
 }
 .panel-heading p {
@@ -159,7 +97,7 @@ p {
 .chart {
   display: block;
   width: 100%;
-  padding: 0 9px;
+  padding: 0 4.5px;
   touch-action: pan-y;
 }
 .chart text {
@@ -182,7 +120,7 @@ p {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 11px 28px;
-  margin: 4px 24px 20px;
+  margin: 2px 12px 10px;
 }
 .legend > span {
   display: flex;
@@ -217,11 +155,11 @@ footer {
   gap: 14px;
   color: #8792a4;
   font-size: 11px;
-  padding: 14px 3px 0;
+  padding: 7px 1.5px 0;
 }
 .accounting {
   margin-top: 2px;
-  padding: 16px 23px;
+  padding: 8px 11.5px;
   font-size: 12px;
   color: #b8c1cf;
 }
@@ -254,7 +192,7 @@ caption {
 th,
 td {
   text-align: right;
-  padding: 10px;
+  padding: 5px;
   border-bottom: 1px solid #303743;
   white-space: nowrap;
 }
@@ -268,7 +206,7 @@ th:first-child {
   border: 1px solid #755230;
   background: #30251b;
   color: #edc296;
-  padding: 15px;
+  padding: 7.5px;
   font-size: 13px;
   line-height: 1.6;
   margin-bottom: 20px;
@@ -281,12 +219,12 @@ footer {
 }
 @media (min-width: 1600px) {
   main {
-    padding-top: 48px;
+    padding-top: 24px;
   }
 }
 @media (max-width: 800px) {
   main {
-    padding: 22px 15px;
+    padding: 11px 7.5px;
   }
   header {
     align-items: flex-start;
@@ -294,19 +232,13 @@ footer {
   h1 {
     font-size: 24px;
   }
-  .stats {
-    grid-template-columns: 1fr 1fr;
-  }
-  .stats > div {
-    padding: 16px;
-  }
   .legend {
     grid-template-columns: 1fr 1fr;
-    margin: 8px 16px 18px;
+    margin: 4px 8px 9px;
     gap: 12px 20px;
   }
   .panel-heading {
-    padding: 18px 16px 12px;
+    padding: 9px 8px 6px;
   }
   footer {
     flex-direction: column;
@@ -317,28 +249,40 @@ footer {
     flex-direction: column;
     gap: 16px;
   }
-  .status-block {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-  }
-  .status-block p {
-    margin: 0;
-  }
-  .stats strong {
-    font-size: 24px;
-  }
   .legend {
     grid-template-columns: 1fr;
   }
   .tag {
     display: none;
   }
-  .chart {
-    min-height: 160px;
-  }
   .sample-bar {
     flex-direction: column;
     gap: 4px;
+  }
+}
+
+.memory-legend {
+  grid-template-columns: repeat(4, 1fr);
+}
+.line-key {
+  width: 30px;
+  height: 8px;
+  flex-shrink: 0;
+}
+header h1 {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.status {
+  flex-shrink: 0;
+}
+@media (max-width: 800px) {
+  .memory-legend {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 500px) {
+  .memory-legend {
+    grid-template-columns: 1fr;
   }
 }

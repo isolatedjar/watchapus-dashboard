@@ -12,6 +12,11 @@ function history() {
       pss: pss * scale,
       filePss: file * scale,
       nonFilePss: (pss - file) * scale,
+      nonFileStats: {
+        average: ((pss - file) * scale) / count,
+        min: (((pss - file) * scale) / count) * 0.5,
+        max: (((pss - file) * scale) / count) * 1.5,
+      },
       rss: pss * scale * 1.7,
     });
     const groups = {
@@ -27,7 +32,11 @@ function history() {
       free: 32 * scale - used,
       used,
       filePss,
-      other: used - Object.values(groups).reduce((n, g) => n + g.pss, 0),
+      other:
+        used -
+        Object.values(groups).reduce((n, g) => n + g.pss, 0) +
+        groups.otherLean.nonFilePss +
+        groups.lake.nonFilePss,
       groups,
       vanished: 0,
     };
@@ -49,10 +58,23 @@ test("shows stacked memory, process counts and synchronized inspection", async (
   await expect(page.getByRole("heading", { name: "Lean build server" })).toBeVisible();
   await expect(page.getByText("Live", { exact: true })).toBeVisible();
   const chart = page.getByRole("img", { name: "Stacked RAM usage over the last 30 minutes" });
-  await expect(chart.locator("[data-layer]")).toHaveCount(6);
+  await expect(chart.locator("[data-layer]")).toHaveCount(4);
+  const perProcess = page.getByRole("img", { name: /^Average, minimum and maximum/ });
+  await expect(perProcess.locator("[data-series]")).toHaveCount(6);
+  await expect(perProcess.locator('[data-series="Watchdogs · Minimum"]')).toHaveAttribute(
+    "stroke-dasharray",
+    "1 5",
+  );
+  await expect(perProcess.locator('[data-series="File workers · Maximum"]')).toHaveAttribute(
+    "stroke-dasharray",
+    "8 5",
+  );
+  await expect(
+    page.getByRole("heading", { name: "Lean LSP processes", exact: true }),
+  ).toBeVisible();
   await chart.hover({ position: { x: 400, y: 100 } });
   await expect(page.getByText(/^Inspecting/)).toBeVisible();
-  await expect(page.locator(".crosshair")).toHaveCount(2);
+  await expect(page.locator(".crosshair")).toHaveCount(3);
   await page.getByText("Memory accounting & raw process measurements").click();
   await expect(page.getByRole("columnheader", { name: "RSS", exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
@@ -68,7 +90,7 @@ test("shows failed samples as gaps and reports the collection error", async ({ p
   await page.route("**/api/history", (route) => route.fulfill({ json: data }));
   await page.goto("/");
   await expect(page.getByRole("alert")).toContainText("Permission denied");
-  await expect(page.locator("[data-layer]")).toHaveCount(12);
+  await expect(page.locator("[data-layer]")).toHaveCount(8);
 });
 test("surfaces a disconnected server without displaying invented data", async ({ page }) => {
   await page.route("**/api/history", (route) =>
@@ -102,4 +124,22 @@ test("serves the dashboard under a preserved /watch prefix", async ({ page, requ
   expect(paths.some((path) => path.startsWith("/watch/assets/"))).toBe(true);
   expect(paths.every((path) => path === "/watch" || path.startsWith("/watch/"))).toBe(true);
   await request.get("/watch/api/missing").then((response) => expect(response.status()).toBe(404));
+});
+
+test("leaves gaps in per-process statistics when a population is empty", async ({ page }) => {
+  const data = history();
+  const m = data.samples[80]!.measurement!;
+  m.other += m.groups.worker.pss;
+  m.filePss -= m.groups.worker.filePss;
+  m.groups.worker = { count: 0, rss: 0, pss: 0, filePss: 0, nonFilePss: 0, nonFileStats: null };
+  await page.route("**/api/history", (route) => route.fulfill({ json: data }));
+  await page.goto("/");
+  const chart = page.getByRole("img", { name: /^Average, minimum and maximum/ });
+  await expect(chart.locator('[data-series="File workers · Average"]')).toHaveCount(2);
+  await expect(chart.locator('[data-series="Watchdogs · Average"]')).toHaveCount(1);
+  await expect(
+    page
+      .getByRole("img", { name: /^Watchdog and file worker process counts/ })
+      .locator('[data-series="File workers"]'),
+  ).toHaveCount(1);
 });
