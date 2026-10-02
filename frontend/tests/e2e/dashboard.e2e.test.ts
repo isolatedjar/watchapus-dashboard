@@ -86,3 +86,20 @@ test("production port serves the SPA and a live procfs sample", async ({ page, r
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Physical memory" })).toBeVisible();
 });
+
+test("serves the dashboard under a preserved /watch prefix", async ({ page, request }) => {
+  const redirect = await request.get("/watch?from=nginx", { maxRedirects: 0 });
+  expect(redirect.status()).toBe(308);
+  expect(redirect.headers().location).toBe("/watch/?from=nginx");
+  const paths: string[] = [];
+  page.on("request", (req) => paths.push(new URL(req.url()).pathname));
+  const historyResponse = page.waitForResponse("**/watch/api/history");
+  await page.goto("/watch");
+  expect((await historyResponse).ok()).toBe(true);
+  await expect(page).toHaveURL(/\/watch\/$/);
+  await expect(page.getByRole("heading", { name: "127.0.0.1", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Physical memory" })).toBeVisible();
+  expect(paths.some((path) => path.startsWith("/watch/assets/"))).toBe(true);
+  expect(paths.every((path) => path === "/watch" || path.startsWith("/watch/"))).toBe(true);
+  await request.get("/watch/api/missing").then((response) => expect(response.status()).toBe(404));
+});

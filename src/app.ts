@@ -7,21 +7,28 @@ import type { Monitor } from "./monitor.ts";
 export function createApp(monitor: Monitor, production = false) {
   const app = express();
   app.disable("x-powered-by");
-  app.get("/api/history", (_req, res) => {
+  const dashboard = express.Router();
+  dashboard.get("/api/history", (_req, res) => {
     res.set("Cache-Control", "no-store").json(monitor.snapshot());
   });
-  app.use("/api", (_req, res) => {
+  dashboard.use("/api", (_req, res) => {
     res.status(404).json({ error: "Not found" });
   });
   if (production) {
-    app.use(express.static(path.join(import.meta.dirname, "../frontend/dist")));
-    app.get("/", (_req, res) =>
+    dashboard.use(express.static(path.join(import.meta.dirname, "../frontend/dist")));
+    dashboard.get("/", (_req, res) =>
       res.sendFile(path.join(import.meta.dirname, "../frontend/dist/index.html")),
     );
   } else {
-    app.get("/", (_req, res) =>
+    dashboard.get("/", (_req, res) =>
       res.send("Watchapus dashboard API. Open the Vite frontend during development."),
     );
   }
+  // The trailing slash makes browser-relative assets and API requests stay under /watch/.
+  app.get(/^\/watch$/, (req, res) =>
+    res.redirect(308, req.originalUrl.replace("/watch", "/watch/")),
+  );
+  app.use("/watch", dashboard);
+  app.use("/", dashboard);
   return app;
 }

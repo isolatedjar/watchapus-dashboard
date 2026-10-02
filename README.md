@@ -42,6 +42,22 @@ For development, `npm run dev` starts Vite and the API server; Vite proxies
 `/api` to `PORT` (default 3000). Reading other users' process mappings still
 requires appropriate permissions.
 
+## Nginx at /watch
+
+The production app serves both `/` and `/watch/`. Use this prefix-preserving
+proxy configuration (no trailing slash on `proxy_pass`):
+
+```nginx
+location /watch {
+    proxy_pass http://127.0.0.1:8999;
+}
+```
+
+The app redirects `/watch` to `/watch/`. Bundled assets and API requests use
+relative URLs, so they stay under `/watch/`; no separate Nginx asset or API
+locations are needed. After updating the code, run `npm run build` and restart
+the Node process with `PORT=8999`.
+
 ## Accounting
 
 Each stacked slice totals **MemTotal − MemFree**, including page cache and

@@ -20,7 +20,7 @@ export default function App() {
     let timer: ReturnType<typeof setTimeout>;
     async function refresh() {
       try {
-        const response = await fetch("/api/history", {
+        const response = await fetch("api/history", {
           signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
           cache: "no-store",
         });
