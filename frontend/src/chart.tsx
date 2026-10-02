@@ -16,7 +16,11 @@ export const memorySeries = [
   },
   { label: "Kernel page tables", color: "#ac83e8", value: (m: Measurement) => m.pageTables },
   { label: "Other system", color: "#b28d77", value: (m: Measurement) => m.otherSystem },
-  { label: "Other parts of Workbench", color: "#5eb9aa", value: (m: Measurement) => m.webPss },
+  {
+    label: "Other parts of Workbench",
+    color: "#5eb9aa",
+    value: (m: Measurement) => m.webPss + m.groups.lake.nonFilePss,
+  },
   { label: "Other RAM + cache", color: "#647080", value: (m: Measurement) => m.other },
 ];
 export const countSeries = [

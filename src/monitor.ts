@@ -20,7 +20,7 @@ export class Monitor {
   constructor(
     collector = createCollector(),
     log = (sample: Sample) => {
-      process.stdout.write(`${JSON.stringify({ version: 4, event: "sample", ...sample })}\n`);
+      process.stdout.write(`${JSON.stringify({ version: 5, event: "sample", ...sample })}\n`);
     },
   ) {
     this._collect = collector;

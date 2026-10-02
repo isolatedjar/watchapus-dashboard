@@ -73,7 +73,7 @@ Layers are listed from the bottom of the stack upward:
 | File workers · non-file   | Sum of `Pss − Pss_File` for `lean --worker`       |
 | Kernel page tables        | Host `PageTables + SecPageTables`                 |
 | Other system              | Host `Slab + KernelStack + Percpu`                |
-| Other parts of Workbench  | Full PSS of recognized web/editor processes       |
+| Other parts of Workbench  | Web/editor PSS + Lake non-file PSS                |
 | Other RAM + cache         | `MemTotal − MemFree` minus the six layers above   |
 
 Page tables cover the whole host, including secondary page tables where the
@@ -98,8 +98,9 @@ precedence. The web layer includes its processes' file PSS; that memory is not
 also added to the yellow Lean/Lake layer. Per-service count, RSS, PSS and file
 PSS are available in the expandable table, API and logs.
 
-Other RAM includes Lake and other Lean non-file memory. Their file-backed
-mappings still contribute to the yellow file-backed layer. It also includes
+Lake non-file memory is included in Other parts of Workbench. Other Lean
+non-file memory stays in Other RAM. Both groups' file-backed mappings still
+contribute to the yellow file-backed layer. Other RAM also includes
 unclassified processes, remaining kernel allocations, and remaining page
 cache. Raw measurements for all four Lean/Lake categories remain available.
 
@@ -159,7 +160,7 @@ stale-data message. Long pauses and failed samples break graph lines.
 ## Capturing logs
 
 The Node process emits newline-delimited JSON to stdout. Every completed round
-emits `event: "sample"` with `version: 4`, a Unix-millisecond `timestamp`,
+emits `event: "sample"` with `version: 5`, a Unix-millisecond `timestamp`,
 `durationMs`, `measurement`, and `error`. Successful measurements contain
 `total`, `free`, `used`, `filePss`, `pageTables`, `otherSystem`, `kernel`,
 `webPss`, `webGroups`, `cpu`, `other`, `vanished`, and each Lean/Lake
@@ -171,10 +172,12 @@ reclaimable/unreclaimable slab, kernel stacks, and per-CPU allocations.
 `webGroups` records count, RSS, PSS and file PSS for each web/editor category.
 `cpu` contains `count` (logical CPUs), `average`, `min` and `max` (percentages
 from 0 to 100), or null while establishing a baseline. Version 4 adds CPU
-statistics; the memory fields retain their version-3 meanings and API names.
-Startup emits `event: "listening"`. Log version 3 subtracts page tables,
-web/editor PSS and Other system from `other`. Version 2 folded Lake and other
-Lean non-file memory into `other`; version 1 excluded it.
+statistics. Version 5 moves Lake non-file PSS from `other` into the displayed
+Other parts of Workbench layer. `webPss` still means only recognized
+web/editor PSS; that layer is `webPss + groups.lake.nonFilePss`. Startup emits
+`event: "listening"`. Log version 3 subtracts page tables, web/editor PSS and
+Other system from `other`. Version 2 folded Lake and other Lean non-file
+memory into `other`; version 1 excluded it.
 
 To capture clean NDJSON, invoke Node directly rather than capturing npm's
 script banners:

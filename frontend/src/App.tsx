@@ -264,10 +264,10 @@ export default function App() {
           of Workbench counts full PSS for recognized Next.js, Workbench shard/collaboration
           servers, VS Code components and Nginx; their file-backed memory stays in that layer. Other
           system is kernel slab (reclaimable and unreclaimable), kernel stacks and per-CPU
-          allocations. Other RAM is the remainder, including Lake and other Lean non-file memory,
-          unclassified processes, remaining kernel allocations and page cache. Swap is excluded. Raw
-          RSS below is diagnostic only and is not added to the stack. Measurements are sequential
-          snapshots, not an atomic host-wide census.
+          allocations. Lake non-file memory belongs to Other parts of Workbench. Other RAM is the
+          remainder, including other Lean non-file memory, unclassified processes, remaining kernel
+          allocations and page cache. Swap is excluded. Raw RSS below is diagnostic only and is not
+          added to the stack. Measurements are sequential snapshots, not an atomic host-wide census.
         </p>
         <p>
           The per-process chart summarizes non-file memory across the watchdogs and workers alive at

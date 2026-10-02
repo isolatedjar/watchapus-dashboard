@@ -59,8 +59,7 @@ function history() {
         used -
         4 * scale -
         Object.values(groups).reduce((n, g) => n + g.pss, 0) +
-        groups.otherLean.nonFilePss +
-        groups.lake.nonFilePss,
+        groups.otherLean.nonFilePss,
       groups,
       vanished: 0,
     };
@@ -96,6 +95,9 @@ test("shows stacked memory, process counts and synchronized inspection", async (
     "Other parts of Workbench",
     "Other RAM + cache",
   ]);
+  await expect(
+    page.locator(".memory-legend > span").filter({ hasText: "Other parts of Workbench" }),
+  ).toContainText("1.3 GiB");
   const perProcess = page.getByRole("img", { name: /^Average, minimum and maximum non-file/ });
   await expect(perProcess.locator("[data-series]")).toHaveCount(6);
   await expect(perProcess.locator('[data-series="Watchdogs · Minimum"]')).toHaveAttribute(

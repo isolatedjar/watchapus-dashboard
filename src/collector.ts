@@ -161,6 +161,7 @@ export async function collect(procRoot = "/proc", cpu?: CpuTracker): Promise<Mea
     result.filePss -
     result.groups.watchdog.nonFilePss -
     result.groups.worker.nonFilePss -
+    result.groups.lake.nonFilePss -
     result.webPss -
     result.otherSystem;
   if (

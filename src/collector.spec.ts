@@ -69,7 +69,7 @@ describe("Linux memory accounting", () => {
       nonFileStats: { average: 250 * 1024, min: 200 * 1024, max: 300 * 1024 },
     });
     expect(sample.filePss).toBe(1300 * 1024);
-    expect(sample.other).toBe(5520 * 1024);
+    expect(sample.other).toBe(5420 * 1024);
     expect(sample.pageTables).toBe(150 * 1024);
     expect(sample.otherSystem).toBe(330 * 1024);
     expect(sample.used).toBe(8000 * 1024);
@@ -79,7 +79,10 @@ describe("Linux memory accounting", () => {
         sample.webPss +
         sample.filePss +
         sample.other +
-        [sample.groups.watchdog, sample.groups.worker].reduce((n, g) => n + g.nonFilePss, 0),
+        [sample.groups.watchdog, sample.groups.worker, sample.groups.lake].reduce(
+          (n, g) => n + g.nonFilePss,
+          0,
+        ),
     ).toBe(sample.used);
     expect(sample.groups.lake.count).toBe(1);
     expect(sample.groups.watchdog.count).toBe(1);
