@@ -141,6 +141,7 @@ export function Chart({
           series.map((s, seriesIndex) => {
             const lower = (m: Measurement) =>
               stacked ? series.slice(0, seriesIndex).reduce((n, row) => n + row.value(m), 0) : 0;
+            // Connect raw samples with straight segments; never fit or smooth the series.
             const coords = points.map(
               (point) =>
                 `${x(point.timestamp)},${y(lower(point.measurement!) + s.value(point.measurement!))}`,
