@@ -7,7 +7,7 @@ import {
   SAMPLE_INTERVAL_MS,
   type Snapshot,
 } from "../shared/metrics.ts";
-import { collect } from "./collector.ts";
+import { createCollector } from "./collector.ts";
 
 export class Monitor {
   private _samples: Sample[] = [];
@@ -18,9 +18,9 @@ export class Monitor {
   private _collect: () => Promise<Measurement>;
   private _log: (sample: Sample) => void;
   constructor(
-    collector = collect,
+    collector = createCollector(),
     log = (sample: Sample) => {
-      process.stdout.write(`${JSON.stringify({ version: 3, event: "sample", ...sample })}\n`);
+      process.stdout.write(`${JSON.stringify({ version: 4, event: "sample", ...sample })}\n`);
     },
   ) {
     this._collect = collector;

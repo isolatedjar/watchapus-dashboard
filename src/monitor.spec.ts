@@ -14,6 +14,7 @@ import { Monitor } from "./monitor.ts";
 
 const emptyGroup = { count: 0, rss: 0, pss: 0, filePss: 0, nonFilePss: 0, nonFileStats: null };
 const measurement: Measurement = {
+  cpu: null,
   total: 100,
   free: 20,
   used: 80,

@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { classify, collect, memoryFields, startTime } from "./collector.ts";
+import { classify, collect, createCollector, memoryFields, startTime } from "./collector.ts";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -184,4 +184,15 @@ it("discards samples where kernel plus process accounting exceeds total used RAM
   const root = await fixture();
   await processFixture(root, 1, "lean", ["lean", "--worker"], 7900, 1000);
   await expect(collect(root)).rejects.toThrow("exceeds used RAM");
+});
+
+it("keeps independent CPU baselines per collector and includes interval statistics", async () => {
+  const root = await fixture();
+  const collectA = createCollector(root);
+  const collectB = createCollector(root);
+  await writeFile(join(root, "stat"), "cpu0 10 0 0 90 0 0 0 0\n");
+  expect((await collectA()).cpu).toBeNull();
+  await writeFile(join(root, "stat"), "cpu0 40 0 0 160 0 0 0 0\n");
+  expect((await collectA()).cpu).toEqual({ count: 1, average: 30, min: 30, max: 30 });
+  expect((await collectB()).cpu).toBeNull();
 });

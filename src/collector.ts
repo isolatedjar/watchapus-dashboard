@@ -9,6 +9,7 @@ import {
   type Measurement,
   webGroups,
 } from "../shared/metrics.ts";
+import { CpuTracker } from "./cpu.ts";
 import { classifyWeb } from "./web-processes.ts";
 
 // Linux spells these units kB, but means KiB.
@@ -43,8 +44,13 @@ function isGone(error: unknown): boolean {
     error instanceof Error && "code" in error && (error.code === "ENOENT" || error.code === "ESRCH")
   );
 }
-export async function collect(procRoot = "/proc"): Promise<Measurement> {
+export function createCollector(procRoot = "/proc") {
+  const cpu = new CpuTracker();
+  return () => collect(procRoot, cpu);
+}
+export async function collect(procRoot = "/proc", cpu?: CpuTracker): Promise<Measurement> {
   const result: Measurement = {
+    cpu: null,
     total: 0,
     free: 0,
     used: 0,
@@ -162,5 +168,6 @@ export async function collect(procRoot = "/proc"): Promise<Measurement> {
     processPss + result.webPss + result.pageTables + result.otherSystem > result.used
   )
     throw new Error("Inconsistent snapshot: attributed memory exceeds used RAM; sample discarded.");
+  if (cpu) result.cpu = cpu.sample(await readFile(join(procRoot, "stat"), "utf8"));
   return result;
 }

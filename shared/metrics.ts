@@ -65,7 +65,11 @@ const groupMetrics = z.object({
   nonFilePss: bytes,
   nonFileStats: z.object({ average: bytes, min: bytes, max: bytes }).nullable(),
 });
+const percent = z.number().finite().min(0).max(100);
 export const zMeasurement = z.object({
+  cpu: z
+    .object({ count: z.number().int().positive(), average: percent, min: percent, max: percent })
+    .nullable(),
   total: bytes,
   free: bytes,
   used: bytes,

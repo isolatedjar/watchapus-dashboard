@@ -9,7 +9,16 @@ import {
   webGroups,
   zSnapshot,
 } from "../../shared/metrics.ts";
-import { Chart, countSeries, gib, memorySeries, processMemorySeries, time } from "./chart.tsx";
+import {
+  Chart,
+  countSeries,
+  cpuSeries,
+  gib,
+  memorySeries,
+  percentage,
+  processMemorySeries,
+  time,
+} from "./chart.tsx";
 
 export default function App() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -170,6 +179,43 @@ export default function App() {
           })}
         </div>
       </section>
+      <section className="panel" aria-labelledby="cpu-title">
+        <div className="panel-heading">
+          <h2 id="cpu-title">CPU Utilization</h2>
+          <span className="tag">PER LOGICAL CPU · %</span>
+        </div>
+        <Chart
+          {...chartProps}
+          series={cpuSeries}
+          stacked={false}
+          unit="percent"
+          max={100}
+          label="Average, minimum and maximum utilization across logical CPUs over the last 30 minutes"
+        />
+        <div className="legend cpu-legend">
+          {cpuSeries.map((s) => {
+            const value = m ? s.value(m) : null;
+            return (
+              <span key={s.label}>
+                <svg className="line-key" viewBox="0 0 30 8" aria-hidden="true">
+                  <line
+                    x1="1"
+                    y1="4"
+                    x2="29"
+                    y2="4"
+                    stroke={s.color}
+                    strokeWidth="2"
+                    strokeDasharray={s.dash}
+                    strokeLinecap={s.dash === "1 5" ? "round" : "butt"}
+                  />
+                </svg>
+                {s.label}
+                <b>{value === null ? "—" : percentage(value)}</b>
+              </span>
+            );
+          })}
+        </div>
+      </section>
       <section className="panel" aria-labelledby="process-title">
         <div className="panel-heading">
           <div>
@@ -214,19 +260,25 @@ export default function App() {
           mappings). Shared pages are proportionally attributed, never added once per process.
         </p>
         <p>
-          Kernel page tables include the whole host's primary and secondary page tables. Web/editor
-          services count full PSS for recognized Next.js, Workbench shard/collaboration servers, VS
-          Code components and Nginx; their file-backed memory stays in that layer. Other system is
-          kernel slab (reclaimable and unreclaimable), kernel stacks and per-CPU allocations. Other
-          RAM is the remainder, including Lake and other Lean non-file memory, unclassified
-          processes, remaining kernel allocations and page cache. Swap is excluded. Raw RSS below is
-          diagnostic only and is not added to the stack. Measurements are sequential snapshots, not
-          an atomic host-wide census.
+          Kernel page tables include the whole host's primary and secondary page tables. Other parts
+          of Workbench counts full PSS for recognized Next.js, Workbench shard/collaboration
+          servers, VS Code components and Nginx; their file-backed memory stays in that layer. Other
+          system is kernel slab (reclaimable and unreclaimable), kernel stacks and per-CPU
+          allocations. Other RAM is the remainder, including Lake and other Lean non-file memory,
+          unclassified processes, remaining kernel allocations and page cache. Swap is excluded. Raw
+          RSS below is diagnostic only and is not added to the stack. Measurements are sequential
+          snapshots, not an atomic host-wide census.
         </p>
         <p>
           The per-process chart summarizes non-file memory across the watchdogs and workers alive at
           each sample: solid average, dotted minimum, dashed maximum. An empty group has no memory
           statistic and appears as a gap, while its process count is zero.
+        </p>
+        <p>
+          CPU utilization measures time executing work between samples, excluding idle, I/O wait and
+          stolen time. The purple lines show average (solid), minimum (dotted) and maximum (dashed)
+          across logical CPUs, on a fixed 0–100% scale. The first sample establishes a baseline; CPU
+          changes or counter resets produce a gap.
         </p>
         <div className="table-scroll">
           <table>

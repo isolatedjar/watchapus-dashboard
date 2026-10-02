@@ -33,6 +33,10 @@ function history() {
     const filePss = Object.values(groups).reduce((n, g) => n + g.filePss, 0);
     const used = (23 + Math.sin(i / 20) * 3) * scale;
     const measurement: Measurement = {
+      cpu:
+        i === 0
+          ? null
+          : { count: 8, average: 40 + (i % 15), min: 5 + (i % 10), max: 80 + (i % 20) },
       total: 32 * scale,
       free: 32 * scale - used,
       used,
@@ -85,14 +89,14 @@ test("shows stacked memory, process counts and synchronized inspection", async (
       .evaluateAll((paths) => paths.map((p) => p.getAttribute("data-layer"))),
   ).toEqual([
     "Kernel page tables",
+    "Other system",
     "File-backed · Lean + Lake",
     "Watchdogs · non-file",
     "File workers · non-file",
-    "Web/editor services",
-    "Other system",
+    "Other parts of Workbench",
     "Other RAM + cache",
   ]);
-  const perProcess = page.getByRole("img", { name: /^Average, minimum and maximum/ });
+  const perProcess = page.getByRole("img", { name: /^Average, minimum and maximum non-file/ });
   await expect(perProcess.locator("[data-series]")).toHaveCount(6);
   await expect(perProcess.locator('[data-series="Watchdogs · Minimum"]')).toHaveAttribute(
     "stroke-dasharray",
@@ -105,9 +109,21 @@ test("shows stacked memory, process counts and synchronized inspection", async (
   await expect(
     page.getByRole("heading", { name: "Lean LSP processes", exact: true }),
   ).toBeVisible();
+  const cpu = page.getByRole("img", { name: /^Average, minimum and maximum utilization/ });
+  await expect(cpu.locator("[data-series]")).toHaveCount(3);
+  await expect(cpu.locator('[data-series="Average"]')).toHaveAttribute("stroke", "#ac83e8");
+  await expect(cpu.locator('[data-series="Minimum"]')).toHaveAttribute("stroke-dasharray", "1 5");
+  await expect(cpu.locator('[data-series="Maximum"]')).toHaveAttribute("stroke-dasharray", "8 5");
+  await expect(cpu.getByText("100%", { exact: true })).toBeVisible();
+  expect(await page.locator("section h2").allTextContents()).toEqual([
+    "Physical memory",
+    "Memory per LSP process",
+    "CPU Utilization",
+    "Lean LSP processes",
+  ]);
   await chart.hover({ position: { x: 400, y: 100 } });
   await expect(page.getByText(/^Inspecting/)).toBeVisible();
-  await expect(page.locator(".crosshair")).toHaveCount(3);
+  await expect(page.locator(".crosshair")).toHaveCount(4);
   await page.getByText("Memory accounting & raw process measurements").click();
   await expect(page.getByRole("columnheader", { name: "RSS", exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
@@ -167,7 +183,7 @@ test("leaves gaps in per-process statistics when a population is empty", async (
   m.groups.worker = { count: 0, rss: 0, pss: 0, filePss: 0, nonFilePss: 0, nonFileStats: null };
   await page.route("**/api/history", (route) => route.fulfill({ json: data }));
   await page.goto("/");
-  const chart = page.getByRole("img", { name: /^Average, minimum and maximum/ });
+  const chart = page.getByRole("img", { name: /^Average, minimum and maximum non-file/ });
   await expect(chart.locator('[data-series="File workers · Average"]')).toHaveCount(2);
   await expect(chart.locator('[data-series="Watchdogs · Average"]')).toHaveCount(1);
   await expect(
@@ -175,4 +191,16 @@ test("leaves gaps in per-process statistics when a population is empty", async (
       .getByRole("img", { name: /^Watchdog and file worker process counts/ })
       .locator('[data-series="File workers"]'),
   ).toHaveCount(1);
+});
+
+test("leaves a CPU gap when a counter baseline is unavailable", async ({ page }) => {
+  const data = history();
+  data.samples[80]!.measurement!.cpu = null;
+  data.samples[180]!.measurement!.cpu = null;
+  await page.route("**/api/history", (route) => route.fulfill({ json: data }));
+  await page.goto("/");
+  const cpu = page.getByRole("img", { name: /^Average, minimum and maximum utilization/ });
+  await expect(cpu.locator('[data-series="Average"]')).toHaveCount(2);
+  await expect(page.locator(".cpu-legend b")).toHaveText(["—", "—", "—"]);
+  await expect(page.locator("[data-layer]")).toHaveCount(7);
 });

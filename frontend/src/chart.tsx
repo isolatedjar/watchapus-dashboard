@@ -4,6 +4,7 @@ import type { Measurement, Sample } from "../../shared/metrics.ts";
 
 export const memorySeries = [
   { label: "Kernel page tables", color: "#ac83e8", value: (m: Measurement) => m.pageTables },
+  { label: "Other system", color: "#b28d77", value: (m: Measurement) => m.otherSystem },
   { label: "File-backed · Lean + Lake", color: "#d5bb35", value: (m: Measurement) => m.filePss },
   {
     label: "Watchdogs · non-file",
@@ -15,8 +16,7 @@ export const memorySeries = [
     color: "#ef9c46",
     value: (m: Measurement) => m.groups.worker.nonFilePss,
   },
-  { label: "Web/editor services", color: "#5eb9aa", value: (m: Measurement) => m.webPss },
-  { label: "Other system", color: "#b28d77", value: (m: Measurement) => m.otherSystem },
+  { label: "Other parts of Workbench", color: "#5eb9aa", value: (m: Measurement) => m.webPss },
   { label: "Other RAM + cache", color: "#647080", value: (m: Measurement) => m.other },
 ];
 export const countSeries = [
@@ -31,6 +31,15 @@ export const processMemorySeries = (["watchdog", "worker"] as const).flatMap((gr
     value: (m: Measurement) => m.groups[group].nonFileStats?.[stat] ?? null,
   })),
 );
+export const cpuSeries = (["average", "min", "max"] as const).map((stat) => ({
+  label: { average: "Average", min: "Minimum", max: "Maximum" }[stat],
+  color: "#ac83e8",
+  dash: { average: undefined, min: "1 5", max: "8 5" }[stat],
+  value: (m: Measurement) => m.cpu?.[stat] ?? null,
+}));
+export function percentage(value: number) {
+  return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
+}
 export function gib(bytes: number) {
   return `${(bytes / 2 ** 30).toLocaleString(undefined, { maximumFractionDigits: 2 })} GiB`;
 }
@@ -55,7 +64,7 @@ type Props = {
   series: Series[];
   stacked: boolean;
   max: number;
-  unit: "bytes" | "count";
+  unit: "bytes" | "count" | "percent";
   selected: Sample | undefined;
   onSelect: (sample: Sample | undefined) => void;
   label: string;
@@ -115,7 +124,7 @@ export function Chart({
           <g key={i}>
             <line className="grid" x1={left} x2={right} y1={y(value)} y2={y(value)} />
             <text x={left - 12} y={y(value) + 4} textAnchor="end">
-              {unit === "bytes" ? gib(value) : value}
+              {unit === "bytes" ? gib(value) : unit === "percent" ? percentage(value) : value}
             </text>
           </g>
         );
