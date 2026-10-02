@@ -23,6 +23,9 @@ export const memorySeries = [
   },
   { label: "Other RAM + cache", color: "#647080", value: (m: Measurement) => m.other },
 ];
+export const swapSeries = [
+  { label: "Swap used", color: "#ef91bf", value: (m: Measurement) => m.swapUsed },
+];
 export const countSeries = [
   { label: "Watchdogs", color: "#619dec", value: (m: Measurement) => m.groups.watchdog.count },
   { label: "File workers", color: "#ef9c46", value: (m: Measurement) => m.groups.worker.count },
@@ -31,16 +34,30 @@ export const processMemorySeries = (["watchdog", "worker"] as const).flatMap((gr
   (["average", "min", "max"] as const).map((stat) => ({
     label: `${group === "watchdog" ? "Watchdogs" : "File workers"} · ${{ average: "Average", min: "Minimum", max: "Maximum" }[stat]}`,
     color: group === "watchdog" ? "#619dec" : "#ef9c46",
-    dash: { average: undefined, min: "1 5", max: "8 5" }[stat],
+    width: stat === "average" ? 2.5 : 1,
     value: (m: Measurement) => m.groups[group].nonFileStats?.[stat] ?? null,
   })),
 );
 export const cpuSeries = (["average", "min", "max"] as const).map((stat) => ({
   label: { average: "Average", min: "Minimum", max: "Maximum" }[stat],
   color: "#ac83e8",
-  dash: { average: undefined, min: "1 5", max: "8 5" }[stat],
+  width: stat === "average" ? 2.5 : 1,
   value: (m: Measurement) => m.cpu?.[stat] ?? null,
 }));
+export const processMemoryBands = (["watchdog", "worker"] as const).map((group) => ({
+  label: group === "watchdog" ? "Watchdogs range" : "File workers range",
+  color: group === "watchdog" ? "#619dec" : "#ef9c46",
+  min: (m: Measurement) => m.groups[group].nonFileStats?.min ?? null,
+  max: (m: Measurement) => m.groups[group].nonFileStats?.max ?? null,
+}));
+export const cpuBands = [
+  {
+    label: "CPU range",
+    color: "#ac83e8",
+    min: (m: Measurement) => m.cpu?.min ?? null,
+    max: (m: Measurement) => m.cpu?.max ?? null,
+  },
+];
 export function percentage(value: number) {
   return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
 }
@@ -57,15 +74,40 @@ export function time(timestamp: number) {
 type Series = {
   label: string;
   color: string;
-  dash?: string;
+  width?: number;
   value: (m: Measurement) => number | null;
 };
+type Band = {
+  label: string;
+  color: string;
+  min: (m: Measurement) => number | null;
+  max: (m: Measurement) => number | null;
+};
+function segmentsFor(samples: Sample[], intervalMs: number, present: (m: Measurement) => boolean) {
+  const segments: Sample[][] = [];
+  let segment: Sample[] = [];
+  for (const sample of samples) {
+    const valid = sample.measurement && present(sample.measurement);
+    if (
+      !valid ||
+      (segment.length && sample.timestamp - segment.at(-1)!.timestamp > intervalMs * 2.5)
+    ) {
+      if (segment.length) segments.push(segment);
+      segment = [];
+    }
+    if (valid) segment.push(sample);
+  }
+  if (segment.length) segments.push(segment);
+  return segments;
+}
 type Props = {
   samples: Sample[];
   end: number;
   windowMs: number;
   intervalMs: number;
   series: Series[];
+  overlays?: Series[];
+  bands?: Band[];
   stacked: boolean;
   max: number;
   unit: "bytes" | "count" | "percent";
@@ -80,6 +122,8 @@ export function Chart({
   windowMs,
   intervalMs,
   series,
+  overlays = [],
+  bands = [],
   stacked,
   max,
   unit,
@@ -145,25 +189,31 @@ export function Chart({
         );
       })}
       <g clipPath={`url(#${clipId})`}>
-        {series.flatMap((s, seriesIndex) => {
-          // Break each series at errors, long pauses, or empty process populations.
-          const segments: Sample[][] = [];
-          let segment: Sample[] = [];
-          for (const sample of samples) {
-            const present = sample.measurement && s.value(sample.measurement) !== null;
-            if (
-              !present ||
-              (segment.length && sample.timestamp - segment.at(-1)!.timestamp > intervalMs * 2.5)
-            ) {
-              if (segment.length) segments.push(segment);
-              segment = [];
-            }
-            if (present) segment.push(sample);
-          }
-          if (segment.length) segments.push(segment);
+        {bands.flatMap((band) =>
+          segmentsFor(samples, intervalMs, (m) => band.min(m) !== null && band.max(m) !== null).map(
+            (points, segmentIndex) => {
+              const lower = points.map((p) => `${x(p.timestamp)},${y(band.min(p.measurement!)!)}`);
+              const upper = points
+                .toReversed()
+                .map((p) => `${x(p.timestamp)},${y(band.max(p.measurement!)!)}`);
+              return (
+                <path
+                  key={`${band.label}-${segmentIndex}`}
+                  data-range={band.label}
+                  d={`M${lower.join(" L")} L${upper.join(" L")} Z`}
+                  fill={band.color}
+                  fillOpacity="0.16"
+                />
+              );
+            },
+          ),
+        )}
+        {[...series, ...overlays].flatMap((s, seriesIndex) => {
+          const isStacked = stacked && seriesIndex < series.length;
+          const segments = segmentsFor(samples, intervalMs, (m) => s.value(m) !== null);
           return segments.map((points, segmentIndex) => {
             const lower = (m: Measurement) =>
-              stacked
+              isStacked
                 ? series.slice(0, seriesIndex).reduce((n, row) => n + (row.value(m) ?? 0), 0)
                 : 0;
             // Connect raw samples with straight segments; never fit or smooth the series.
@@ -176,7 +226,7 @@ export function Chart({
               .map((point) => `${x(point.timestamp)},${y(lower(point.measurement!))}`);
             return (
               <g key={`${seriesIndex}-${segmentIndex}`}>
-                {stacked && (
+                {isStacked && (
                   <path
                     data-layer={s.label}
                     d={`M${coords.join(" L")} L${reverse.join(" L")} Z`}
@@ -189,9 +239,7 @@ export function Chart({
                   d={`M${coords.join(" L")}`}
                   fill="none"
                   stroke={s.color}
-                  strokeWidth={stacked ? 1.2 : 2}
-                  strokeDasharray={s.dash}
-                  strokeLinecap={s.dash === "1 5" ? "round" : "butt"}
+                  strokeWidth={isStacked ? 1.2 : (s.width ?? 2)}
                 />
                 {points.length === 1 && (
                   <circle

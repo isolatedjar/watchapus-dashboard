@@ -18,6 +18,7 @@ const measurement: Measurement = {
   total: 100,
   free: 20,
   used: 80,
+  swapUsed: 0,
   filePss: 0,
   other: 80,
   pageTables: 0,

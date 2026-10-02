@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -15,7 +15,7 @@ async function fixture() {
   roots.push(root);
   await writeFile(
     join(root, "meminfo"),
-    "MemTotal:       10000 kB\nMemFree:         2000 kB\nCached: 4000 kB\nSwapTotal: 9000 kB\nPageTables: 100 kB\nSecPageTables: 50 kB\nSlab: 300 kB\nSReclaimable: 200 kB\nSUnreclaim: 100 kB\nKernelStack: 20 kB\nPercpu: 10 kB\n",
+    "MemTotal:       10000 kB\nMemFree:         2000 kB\nCached: 4000 kB\nSwapTotal: 9000 kB\nSwapFree: 4000 kB\nPageTables: 100 kB\nSecPageTables: 50 kB\nSlab: 300 kB\nSReclaimable: 200 kB\nSUnreclaim: 100 kB\nKernelStack: 20 kB\nPercpu: 10 kB\n",
   );
   return root;
 }
@@ -73,6 +73,7 @@ describe("Linux memory accounting", () => {
     expect(sample.pageTables).toBe(150 * 1024);
     expect(sample.otherSystem).toBe(330 * 1024);
     expect(sample.used).toBe(8000 * 1024);
+    expect(sample.swapUsed).toBe(5000 * 1024);
     expect(
       sample.pageTables +
         sample.otherSystem +
@@ -172,15 +173,19 @@ it("supports kernels without the optional secondary-page-table and per-CPU field
   const root = await fixture();
   await writeFile(
     join(root, "meminfo"),
-    "MemTotal: 10000 kB\nMemFree: 2000 kB\nPageTables: 100 kB\nSlab: 300 kB\nSReclaimable: 200 kB\nSUnreclaim: 100 kB\nKernelStack: 20 kB\n",
+    "MemTotal: 10000 kB\nMemFree: 2000 kB\nSwapTotal: 0 kB\nSwapFree: 0 kB\nPageTables: 100 kB\nSlab: 300 kB\nSReclaimable: 200 kB\nSUnreclaim: 100 kB\nKernelStack: 20 kB\n",
   );
   const sample = await collect(root);
   expect(sample.pageTables).toBe(100 * 1024);
   expect(sample.otherSystem).toBe(320 * 1024);
+  expect(sample.swapUsed).toBe(0);
 });
 it("does not fabricate an empty kernel layer when required meminfo fields are absent", async () => {
   const root = await fixture();
-  await writeFile(join(root, "meminfo"), "MemTotal: 10000 kB\nMemFree: 2000 kB\n");
+  await writeFile(
+    join(root, "meminfo"),
+    "MemTotal: 10000 kB\nMemFree: 2000 kB\nSwapTotal: 0 kB\nSwapFree: 0 kB\n",
+  );
   await expect(collect(root)).rejects.toThrow("PageTables");
 });
 it("discards samples where kernel plus process accounting exceeds total used RAM", async () => {
@@ -198,4 +203,14 @@ it("keeps independent CPU baselines per collector and includes interval statisti
   await writeFile(join(root, "stat"), "cpu0 40 0 0 160 0 0 0 0\n");
   expect((await collectA()).cpu).toEqual({ count: 1, average: 30, min: 30, max: 30 });
   expect((await collectB()).cpu).toBeNull();
+});
+
+it("rejects missing or inconsistent swap counters", async () => {
+  const root = await fixture();
+  const file = join(root, "meminfo");
+  const meminfo = await readFile(file, "utf8");
+  await writeFile(file, meminfo.replace("SwapFree: 4000 kB", "SwapFree: 10000 kB"));
+  await expect(collect(root)).rejects.toThrow("Inconsistent procfs swap fields");
+  await writeFile(file, meminfo.replace("SwapFree: 4000 kB\n", ""));
+  await expect(collect(root)).rejects.toThrow("SwapFree");
 });

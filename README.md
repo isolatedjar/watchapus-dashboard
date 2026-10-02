@@ -64,6 +64,13 @@ Each stacked slice totals **MemTotal − MemFree**, including page cache and
 excluding swap. All memory quantities in the API and logs are **bytes**, not
 KiB. The display uses GiB (2³⁰ bytes).
 
+A separate solid pink **Swap used** line overlays Physical memory using
+`SwapTotal − SwapFree`, on the same GiB axis. It is not stacked or added to
+used RAM. The axis includes both total physical RAM and the largest observed
+swap usage, so swap remains visible even if it exceeds RAM capacity. Hosts
+without swap show a zero line. Swap usage is an allocation total, not swap I/O
+activity; it can stay high after memory pressure subsides.
+
 Layers are listed from the bottom of the stack upward:
 
 | Layer                     | Measurement                                       |
@@ -106,15 +113,15 @@ cache. Raw measurements for all four Lean/Lake categories remain available.
 
 The second graph shows **average, minimum and maximum non-file memory per
 process** across the watchdogs and workers alive at each sample (not a moving
-average over time). Blue means watchdogs; orange means file workers. Average
-is solid, minimum dotted, maximum dashed. An empty group has null statistics
-and appears as a gap.
+average over time). Blue means watchdogs; orange means file workers. The
+average uses a thicker solid line; thin solid minimum/maximum bounds enclose a
+shaded range. An empty group has null statistics and appears as a gap.
 
 The third graph, **CPU Utilization**, shows average, minimum and maximum
 utilization **across logical CPUs** over the interval since the previous
-successful sample. All three lines use the page-table purple: solid average,
-dotted minimum, dashed maximum, on a fixed 0–100% scale. Each CPU's
-utilization comes from deltas in `/proc/stat`:
+successful sample. All three lines use the page-table purple: a thicker
+average line and thin minimum/maximum bounds with shading between them, on a
+fixed 0–100% scale. Each CPU's utilization comes from deltas in `/proc/stat`:
 `(user + nice + system + irq + softirq) / (user + nice + system + idle + iowait + irq + softirq + steal)`.
 Idle, I/O wait and stolen time do not count as executing work. Guest ticks are
 already in user/nice and are not counted twice. The average is the arithmetic
@@ -160,24 +167,25 @@ stale-data message. Long pauses and failed samples break graph lines.
 ## Capturing logs
 
 The Node process emits newline-delimited JSON to stdout. Every completed round
-emits `event: "sample"` with `version: 5`, a Unix-millisecond `timestamp`,
+emits `event: "sample"` with `version: 6`, a Unix-millisecond `timestamp`,
 `durationMs`, `measurement`, and `error`. Successful measurements contain
-`total`, `free`, `used`, `filePss`, `pageTables`, `otherSystem`, `kernel`,
-`webPss`, `webGroups`, `cpu`, `other`, `vanished`, and each Lean/Lake
-category's `count`, `rss`, `pss`, `filePss`, `nonFilePss`, and `nonFileStats`
-(`average`, `min`, `max` in bytes, or null for an empty group). Failures have
-`measurement: null` and a diagnostic `error`; a successful sample has
-`error: null`. `kernel` records primary/secondary page tables, total and
-reclaimable/unreclaimable slab, kernel stacks, and per-CPU allocations.
-`webGroups` records count, RSS, PSS and file PSS for each web/editor category.
-`cpu` contains `count` (logical CPUs), `average`, `min` and `max` (percentages
-from 0 to 100), or null while establishing a baseline. Version 4 adds CPU
-statistics. Version 5 moves Lake non-file PSS from `other` into the displayed
-Other parts of Workbench layer. `webPss` still means only recognized
-web/editor PSS; that layer is `webPss + groups.lake.nonFilePss`. Startup emits
-`event: "listening"`. Log version 3 subtracts page tables, web/editor PSS and
-Other system from `other`. Version 2 folded Lake and other Lean non-file
-memory into `other`; version 1 excluded it.
+`total`, `free`, `used`, `swapUsed`, `filePss`, `pageTables`, `otherSystem`,
+`kernel`, `webPss`, `webGroups`, `cpu`, `other`, `vanished`, and each
+Lean/Lake category's `count`, `rss`, `pss`, `filePss`, `nonFilePss`, and
+`nonFileStats` (`average`, `min`, `max` in bytes, or null for an empty group).
+Failures have `measurement: null` and a diagnostic `error`; a successful
+sample has `error: null`. `kernel` records primary/secondary page tables,
+total and reclaimable/unreclaimable slab, kernel stacks, and per-CPU
+allocations. `webGroups` records count, RSS, PSS and file PSS for each
+web/editor category. `cpu` contains `count` (logical CPUs), `average`, `min`
+and `max` (percentages from 0 to 100), or null while establishing a baseline.
+Version 6 adds `swapUsed` in bytes; physical RAM accounting is unchanged.
+Version 4 adds CPU statistics. Version 5 moves Lake non-file PSS from `other`
+into the displayed Other parts of Workbench layer. `webPss` still means only
+recognized web/editor PSS; that layer is `webPss + groups.lake.nonFilePss`.
+Startup emits `event: "listening"`. Log version 3 subtracts page tables,
+web/editor PSS and Other system from `other`. Version 2 folded Lake and other
+Lean non-file memory into `other`; version 1 excluded it.
 
 To capture clean NDJSON, invoke Node directly rather than capturing npm's
 script banners:

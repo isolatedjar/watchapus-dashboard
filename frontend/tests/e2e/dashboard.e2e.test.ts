@@ -40,6 +40,7 @@ function history() {
       total: 32 * scale,
       free: 32 * scale - used,
       used,
+      swapUsed: (Math.max(0, i - 90) / 9) * scale,
       filePss,
       pageTables: 2 * scale,
       otherSystem: scale,
@@ -100,22 +101,31 @@ test("shows stacked memory, process counts and synchronized inspection", async (
   ).toContainText("1.3 GiB");
   const perProcess = page.getByRole("img", { name: /^Average, minimum and maximum non-file/ });
   await expect(perProcess.locator("[data-series]")).toHaveCount(6);
+  await expect(perProcess.locator("[data-range]")).toHaveCount(2);
+  await expect(perProcess.locator('[data-series="Watchdogs · Average"]')).toHaveAttribute(
+    "stroke-width",
+    "2.5",
+  );
+  await expect(perProcess.locator("[data-series][stroke-dasharray]")).toHaveCount(0);
+  await expect(chart.locator('[data-series="Swap used"]')).toHaveCount(1);
+  await expect(chart.locator('[data-layer="Swap used"]')).toHaveCount(0);
   await expect(perProcess.locator('[data-series="Watchdogs · Minimum"]')).toHaveAttribute(
-    "stroke-dasharray",
-    "1 5",
+    "stroke-width",
+    "1",
   );
   await expect(perProcess.locator('[data-series="File workers · Maximum"]')).toHaveAttribute(
-    "stroke-dasharray",
-    "8 5",
+    "stroke-width",
+    "1",
   );
   await expect(
     page.getByRole("heading", { name: "Lean LSP processes", exact: true }),
   ).toBeVisible();
   const cpu = page.getByRole("img", { name: /^Average, minimum and maximum utilization/ });
   await expect(cpu.locator("[data-series]")).toHaveCount(3);
+  await expect(cpu.locator("[data-range]")).toHaveCount(1);
   await expect(cpu.locator('[data-series="Average"]')).toHaveAttribute("stroke", "#ac83e8");
-  await expect(cpu.locator('[data-series="Minimum"]')).toHaveAttribute("stroke-dasharray", "1 5");
-  await expect(cpu.locator('[data-series="Maximum"]')).toHaveAttribute("stroke-dasharray", "8 5");
+  await expect(cpu.locator('[data-series="Minimum"]')).toHaveAttribute("stroke-width", "1");
+  await expect(cpu.locator('[data-series="Maximum"]')).toHaveAttribute("stroke-width", "1");
   await expect(cpu.getByText("100%", { exact: true })).toBeVisible();
   expect(await page.locator("section h2").allTextContents()).toEqual([
     "Physical memory",
@@ -142,6 +152,8 @@ test("shows failed samples as gaps and reports the collection error", async ({ p
   await page.goto("/");
   await expect(page.getByRole("alert")).toContainText("Permission denied");
   await expect(page.locator("[data-layer]")).toHaveCount(14);
+  await expect(page.locator('[data-series="Swap used"]')).toHaveCount(2);
+  await expect(page.locator('[data-range="CPU range"]')).toHaveCount(2);
 });
 test("surfaces a disconnected server without displaying invented data", async ({ page }) => {
   await page.route("**/api/history", (route) =>
@@ -187,6 +199,7 @@ test("leaves gaps in per-process statistics when a population is empty", async (
   await page.goto("/");
   const chart = page.getByRole("img", { name: /^Average, minimum and maximum non-file/ });
   await expect(chart.locator('[data-series="File workers · Average"]')).toHaveCount(2);
+  await expect(chart.locator('[data-range="File workers range"]')).toHaveCount(2);
   await expect(chart.locator('[data-series="Watchdogs · Average"]')).toHaveCount(1);
   await expect(
     page
@@ -203,6 +216,28 @@ test("leaves a CPU gap when a counter baseline is unavailable", async ({ page })
   await page.goto("/");
   const cpu = page.getByRole("img", { name: /^Average, minimum and maximum utilization/ });
   await expect(cpu.locator('[data-series="Average"]')).toHaveCount(2);
+  await expect(cpu.locator('[data-range="CPU range"]')).toHaveCount(2);
   await expect(page.locator(".cpu-legend b")).toHaveText(["—", "—", "—"]);
   await expect(page.locator("[data-layer]")).toHaveCount(7);
+});
+
+test("plots swap independently of RAM and expands the shared axis when needed", async ({
+  page,
+}) => {
+  const data = history();
+  data.samples.forEach((s) => {
+    s.measurement!.swapUsed = 40 * 2 ** 30;
+  });
+  await page.route("**/api/history", (route) => route.fulfill({ json: data }));
+  await page.goto("/");
+  const chart = page.getByRole("img", { name: "Stacked RAM usage over the last 30 minutes" });
+  await expect(chart.getByText("40 GiB", { exact: true })).toBeVisible();
+  await expect(chart.locator("[data-layer]")).toHaveCount(7);
+  const swap = chart.locator('[data-series="Swap used"]');
+  await expect(swap).toHaveAttribute("fill", "none");
+  const lastY = (d: string) => Number(d.split(" L").at(-1)!.split(",")[1]);
+  expect(lastY((await swap.getAttribute("d"))!)).toBeCloseTo(18);
+  const ramTop = await chart.locator('[data-series="Other RAM + cache"]').getAttribute("d");
+  const ram = data.samples.at(-1)!.measurement!.used;
+  expect(lastY(ramTop!)).toBeCloseTo(210 - (ram / (40 * 2 ** 30)) * 192);
 });

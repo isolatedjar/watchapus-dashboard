@@ -54,6 +54,7 @@ export async function collect(procRoot = "/proc", cpu?: CpuTracker): Promise<Mea
     total: 0,
     free: 0,
     used: 0,
+    swapUsed: 0,
     filePss: 0,
     pageTables: 0,
     otherSystem: 0,
@@ -134,6 +135,9 @@ export async function collect(procRoot = "/proc", cpu?: CpuTracker): Promise<Mea
   result.total = required(mem, "MemTotal");
   result.free = required(mem, "MemFree");
   result.used = result.total - result.free;
+  const swapTotal = required(mem, "SwapTotal");
+  result.swapUsed = swapTotal - required(mem, "SwapFree");
+  if (result.swapUsed < 0) throw new Error("Inconsistent procfs swap fields");
   result.kernel = {
     primaryPageTables: required(mem, "PageTables"),
     secondaryPageTables: mem.get("SecPageTables") ?? 0,

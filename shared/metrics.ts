@@ -73,6 +73,7 @@ export const zMeasurement = z.object({
   total: bytes,
   free: bytes,
   used: bytes,
+  swapUsed: bytes,
   filePss: bytes,
   pageTables: bytes,
   otherSystem: bytes,

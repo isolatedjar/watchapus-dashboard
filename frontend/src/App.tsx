@@ -12,11 +12,14 @@ import {
 import {
   Chart,
   countSeries,
+  cpuBands,
   cpuSeries,
   gib,
   memorySeries,
   percentage,
+  processMemoryBands,
   processMemorySeries,
+  swapSeries,
   time,
 } from "./chart.tsx";
 
@@ -70,7 +73,10 @@ export default function App() {
   const interval = snapshot?.sampleIntervalMs ?? SAMPLE_INTERVAL_MS;
   const stale = latest && now - latest.timestamp > interval * 2.5;
   const failure = error ?? latest?.error ?? (stale ? "No new samples from the collector." : null);
-  const maxMemory = Math.max(2 ** 30, ...samples.map((s) => s.measurement?.total ?? 0));
+  const maxMemory = Math.max(
+    2 ** 30,
+    ...samples.map((s) => Math.max(s.measurement?.total ?? 0, s.measurement?.swapUsed ?? 0)),
+  );
   const maxProcessMemory =
     Math.max(
       2 ** 28,
@@ -122,18 +128,19 @@ export default function App() {
           <div>
             <h2 id="memory-title">Physical memory</h2>
           </div>
-          <span className="tag">STACKED · GiB</span>
+          <span className="tag">RAM + SWAP LINE · GiB</span>
         </div>
         <Chart
           {...chartProps}
           series={memorySeries}
+          overlays={swapSeries}
           stacked
           unit="bytes"
           max={maxMemory}
           label="Stacked RAM usage over the last 30 minutes"
         />
         <div className="legend memory-legend">
-          {memorySeries.map((s) => (
+          {[...memorySeries, ...swapSeries].map((s) => (
             <span key={s.label}>
               <i style={{ background: s.color }} />
               {s.label}
@@ -150,6 +157,7 @@ export default function App() {
         <Chart
           {...chartProps}
           series={processMemorySeries}
+          bands={processMemoryBands}
           stacked={false}
           unit="bytes"
           max={maxProcessMemory}
@@ -161,16 +169,7 @@ export default function App() {
             return (
               <span key={s.label}>
                 <svg className="line-key" viewBox="0 0 30 8" aria-hidden="true">
-                  <line
-                    x1="1"
-                    y1="4"
-                    x2="29"
-                    y2="4"
-                    stroke={s.color}
-                    strokeWidth="2"
-                    strokeDasharray={s.dash}
-                    strokeLinecap={s.dash === "1 5" ? "round" : "butt"}
-                  />
+                  <line x1="1" y1="4" x2="29" y2="4" stroke={s.color} strokeWidth={s.width} />
                 </svg>
                 {s.label}
                 <b>{value === null ? "—" : gib(value)}</b>
@@ -187,6 +186,7 @@ export default function App() {
         <Chart
           {...chartProps}
           series={cpuSeries}
+          bands={cpuBands}
           stacked={false}
           unit="percent"
           max={100}
@@ -198,16 +198,7 @@ export default function App() {
             return (
               <span key={s.label}>
                 <svg className="line-key" viewBox="0 0 30 8" aria-hidden="true">
-                  <line
-                    x1="1"
-                    y1="4"
-                    x2="29"
-                    y2="4"
-                    stroke={s.color}
-                    strokeWidth="2"
-                    strokeDasharray={s.dash}
-                    strokeLinecap={s.dash === "1 5" ? "round" : "butt"}
-                  />
+                  <line x1="1" y1="4" x2="29" y2="4" stroke={s.color} strokeWidth={s.width} />
                 </svg>
                 {s.label}
                 <b>{value === null ? "—" : percentage(value)}</b>
@@ -266,18 +257,21 @@ export default function App() {
           system is kernel slab (reclaimable and unreclaimable), kernel stacks and per-CPU
           allocations. Lake non-file memory belongs to Other parts of Workbench. Other RAM is the
           remainder, including other Lean non-file memory, unclassified processes, remaining kernel
-          allocations and page cache. Swap is excluded. Raw RSS below is diagnostic only and is not
-          added to the stack. Measurements are sequential snapshots, not an atomic host-wide census.
+          allocations and page cache. The separate pink line shows total swap used (SwapTotal −
+          SwapFree), on the same GiB axis; it is excluded from the RAM stack. Raw RSS below is
+          diagnostic only and is not added to the stack. Measurements are sequential snapshots, not
+          an atomic host-wide census.
         </p>
         <p>
           The per-process chart summarizes non-file memory across the watchdogs and workers alive at
-          each sample: solid average, dotted minimum, dashed maximum. An empty group has no memory
-          statistic and appears as a gap, while its process count is zero.
+          each sample: a thicker average line and thin minimum/maximum bounds with shading between
+          them. An empty group has no memory statistic and appears as a gap, while its process count
+          is zero.
         </p>
         <p>
           CPU utilization measures time executing work between samples, excluding idle, I/O wait and
-          stolen time. The purple lines show average (solid), minimum (dotted) and maximum (dashed)
-          across logical CPUs, on a fixed 0–100% scale. The first sample establishes a baseline; CPU
+          stolen time. The purple band spans minimum to maximum across logical CPUs, with a thicker
+          average line, on a fixed 0–100% scale. The first sample establishes a baseline; CPU
           changes or counter resets produce a gap.
         </p>
         <div className="table-scroll">
