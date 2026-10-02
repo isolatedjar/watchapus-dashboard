@@ -1,7 +1,14 @@
 import request from "supertest";
 import { afterEach, expect, it, vi } from "vitest";
 
-import { HISTORY_MS, type Measurement, SAMPLE_INTERVAL_MS, zSnapshot } from "../shared/metrics.ts";
+import {
+  emptyKernel,
+  emptyWebGroups,
+  HISTORY_MS,
+  type Measurement,
+  SAMPLE_INTERVAL_MS,
+  zSnapshot,
+} from "../shared/metrics.ts";
 import { createApp } from "./app.ts";
 import { Monitor } from "./monitor.ts";
 
@@ -12,6 +19,11 @@ const measurement: Measurement = {
   used: 80,
   filePss: 0,
   other: 80,
+  pageTables: 0,
+  otherSystem: 0,
+  kernel: emptyKernel(),
+  webPss: 0,
+  webGroups: emptyWebGroups(),
   vanished: 0,
   groups: { lake: emptyGroup, watchdog: emptyGroup, worker: emptyGroup, otherLean: emptyGroup },
 };

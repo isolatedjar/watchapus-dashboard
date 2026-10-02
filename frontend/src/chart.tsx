@@ -3,6 +3,7 @@ import { useId } from "react";
 import type { Measurement, Sample } from "../../shared/metrics.ts";
 
 export const memorySeries = [
+  { label: "Kernel page tables", color: "#ac83e8", value: (m: Measurement) => m.pageTables },
   { label: "File-backed · Lean + Lake", color: "#d5bb35", value: (m: Measurement) => m.filePss },
   {
     label: "Watchdogs · non-file",
@@ -14,6 +15,8 @@ export const memorySeries = [
     color: "#ef9c46",
     value: (m: Measurement) => m.groups.worker.nonFilePss,
   },
+  { label: "Web/editor services", color: "#5eb9aa", value: (m: Measurement) => m.webPss },
+  { label: "Other system", color: "#b28d77", value: (m: Measurement) => m.otherSystem },
   { label: "Other RAM + cache", color: "#647080", value: (m: Measurement) => m.other },
 ];
 export const countSeries = [

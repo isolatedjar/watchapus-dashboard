@@ -5,6 +5,8 @@ import {
   type Sample,
   SAMPLE_INTERVAL_MS,
   type Snapshot,
+  webGroupLabels,
+  webGroups,
   zSnapshot,
 } from "../../shared/metrics.ts";
 import { Chart, countSeries, gib, memorySeries, processMemorySeries, time } from "./chart.tsx";
@@ -212,11 +214,14 @@ export default function App() {
           mappings). Shared pages are proportionally attributed, never added once per process.
         </p>
         <p>
-          Other RAM is total used RAM minus the file-backed, watchdog non-file and worker non-file
-          layers. It includes Lake and other Lean non-file memory, other processes, kernel memory
-          and the remaining page cache. Swap is excluded. Raw RSS below is diagnostic only and is
-          not added to the stack. Measurements are sequential snapshots, not an atomic host-wide
-          census.
+          Kernel page tables include the whole host's primary and secondary page tables. Web/editor
+          services count full PSS for recognized Next.js, Workbench shard/collaboration servers, VS
+          Code components and Nginx; their file-backed memory stays in that layer. Other system is
+          kernel slab (reclaimable and unreclaimable), kernel stacks and per-CPU allocations. Other
+          RAM is the remainder, including Lake and other Lean non-file memory, unclassified
+          processes, remaining kernel allocations and page cache. Swap is excluded. Raw RSS below is
+          diagnostic only and is not added to the stack. Measurements are sequential snapshots, not
+          an atomic host-wide census.
         </p>
         <p>
           The per-process chart summarizes non-file memory across the watchdogs and workers alive at
@@ -236,22 +241,53 @@ export default function App() {
               </tr>
             </thead>
             <tbody>
-              {groups.map((group) => (
-                <tr key={group}>
-                  <th>
-                    {
-                      {
-                        lake: "Lake",
-                        watchdog: "Watchdogs",
-                        worker: "File workers",
-                        otherLean: "Other Lean",
-                      }[group]
-                    }
-                  </th>
-                  <td>{m?.groups[group].count ?? "—"}</td>
-                  <td>{m ? gib(m.groups[group].rss) : "—"}</td>
-                  <td>{m ? gib(m.groups[group].pss) : "—"}</td>
-                  <td>{m ? gib(m.groups[group].filePss) : "—"}</td>
+              {[
+                ...groups.map((group) => ({
+                  label: {
+                    lake: "Lake",
+                    watchdog: "Watchdogs",
+                    worker: "File workers",
+                    otherLean: "Other Lean",
+                  }[group],
+                  metrics: m?.groups[group],
+                })),
+                ...webGroups.map((group) => ({
+                  label: webGroupLabels[group],
+                  metrics: m?.webGroups[group],
+                })),
+              ].map(({ label, metrics }) => (
+                <tr key={label}>
+                  <th>{label}</th>
+                  <td>{metrics?.count ?? "—"}</td>
+                  <td>{metrics ? gib(metrics.rss) : "—"}</td>
+                  <td>{metrics ? gib(metrics.pss) : "—"}</td>
+                  <td>{metrics ? gib(metrics.filePss) : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <table>
+            <caption>Kernel memory at {current ? time(current.timestamp) : "—"}</caption>
+            <thead>
+              <tr>
+                <th>Component</th>
+                <th>Physical RAM</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(
+                [
+                  ["Primary page tables", "primaryPageTables"],
+                  ["Secondary page tables", "secondaryPageTables"],
+                  ["Slab · reclaimable", "slabReclaimable"],
+                  ["Slab · unreclaimable", "slabUnreclaimable"],
+                  ["Kernel stacks", "kernelStack"],
+                  ["Per-CPU allocations", "percpu"],
+                ] as const
+              ).map(([label, key]) => (
+                <tr key={key}>
+                  <th>{label}</th>
+                  <td>{m ? gib(m.kernel[key]) : "—"}</td>
                 </tr>
               ))}
             </tbody>

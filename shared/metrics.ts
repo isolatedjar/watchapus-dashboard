@@ -5,6 +5,58 @@ export const HISTORY_MS = 30 * 60_000;
 export const groups = ["lake", "watchdog", "worker", "otherLean"] as const;
 export type Group = (typeof groups)[number];
 const bytes = z.number().finite().nonnegative();
+export const webGroups = [
+  "next",
+  "shardManager",
+  "collaboration",
+  "vscode",
+  "extensions",
+  "watchers",
+  "languageServers",
+  "nginx",
+] as const;
+export type WebGroup = (typeof webGroups)[number];
+export const webGroupLabels: Record<WebGroup, string> = {
+  next: "Next.js",
+  shardManager: "Shard manager",
+  collaboration: "Collaboration server",
+  vscode: "VS Code server + helpers",
+  extensions: "VS Code extension hosts",
+  watchers: "VS Code file watchers",
+  languageServers: "VS Code language servers",
+  nginx: "Nginx",
+};
+const webMetrics = z.object({
+  count: z.number().int().nonnegative(),
+  rss: bytes,
+  pss: bytes,
+  filePss: bytes,
+});
+export function emptyWebGroups(): Record<WebGroup, z.infer<typeof webMetrics>> {
+  return Object.fromEntries(
+    webGroups.map((group) => [group, { count: 0, rss: 0, pss: 0, filePss: 0 }]),
+  ) as Record<WebGroup, z.infer<typeof webMetrics>>;
+}
+export const zKernel = z.object({
+  primaryPageTables: bytes,
+  secondaryPageTables: bytes,
+  slab: bytes,
+  slabReclaimable: bytes,
+  slabUnreclaimable: bytes,
+  kernelStack: bytes,
+  percpu: bytes,
+});
+export function emptyKernel(): z.infer<typeof zKernel> {
+  return {
+    primaryPageTables: 0,
+    secondaryPageTables: 0,
+    slab: 0,
+    slabReclaimable: 0,
+    slabUnreclaimable: 0,
+    kernelStack: 0,
+    percpu: 0,
+  };
+}
 const groupMetrics = z.object({
   count: z.number().int().nonnegative(),
   rss: bytes,
@@ -18,6 +70,11 @@ export const zMeasurement = z.object({
   free: bytes,
   used: bytes,
   filePss: bytes,
+  pageTables: bytes,
+  otherSystem: bytes,
+  kernel: zKernel,
+  webPss: bytes,
+  webGroups: z.record(z.enum(webGroups), webMetrics),
   other: bytes,
   groups: z.object({
     lake: groupMetrics,

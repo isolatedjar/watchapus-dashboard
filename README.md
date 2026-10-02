@@ -64,16 +64,44 @@ Each stacked slice totals **MemTotal − MemFree**, including page cache and
 excluding swap. All quantities in the API and logs are **bytes**, not KiB. The
 display uses GiB (2³⁰ bytes).
 
+Layers are listed from the bottom of the stack upward:
+
 | Layer                     | Measurement                                       |
 | ------------------------- | ------------------------------------------------- |
+| Kernel page tables        | Host `PageTables + SecPageTables`                 |
 | File-backed · Lean + Lake | Sum of `Pss_File` for all Lean and Lake processes |
 | Watchdogs · non-file      | Sum of `Pss − Pss_File` for `lean --server`       |
 | File workers · non-file   | Sum of `Pss − Pss_File` for `lean --worker`       |
-| Other RAM + cache         | `MemTotal − MemFree` minus the three layers above |
+| Web/editor services       | Full PSS of recognized web/editor processes       |
+| Other system              | Host `Slab + KernelStack + Percpu`                |
+| Other RAM + cache         | `MemTotal − MemFree` minus the six layers above   |
+
+Page tables cover the whole host, including secondary page tables where the
+kernel reports them. `SecPageTables` and `Percpu` default to zero on kernels
+that do not expose them. Process PSS excludes these kernel allocations.
+
+Slab holds kernel objects such as file metadata and socket bookkeeping. It
+includes both reclaimable (`SReclaimable`) and unreclaimable (`SUnreclaim`)
+allocations; these are shown separately in the detail table but counted only
+once. **Other system does not mean unreclaimable memory**, and is not an
+exhaustive kernel total. `VmallocUsed` is deliberately excluded because it can
+overlap other allocations. Buffers remain in Other RAM + cache.
+
+Web/editor services include recognized Next.js servers, Workbench shard and
+collaboration servers, VS Code server/helpers, extension hosts, file watchers,
+auxiliary language servers, and Nginx. Classification uses executable and
+script arguments, not ancestry or arbitrary command-string matches. The VS
+Code rule targets this deployment's `/app/vscode-server` installation; other
+installation paths and unrecognized applications remain in Other RAM. Shell
+and bwrap launchers are excluded. Lean/Lake groups take precedence. The web
+layer includes its processes' file PSS; that memory is not also added to the
+yellow Lean/Lake layer. Per-service count, RSS, PSS and file PSS are available
+in the expandable table, API and logs.
 
 Other RAM includes Lake and other Lean non-file memory. Their file-backed
-mappings still contribute to the yellow file-backed layer. Raw measurements
-for all four process categories remain available in the API, logs and table.
+mappings still contribute to the yellow file-backed layer. It also includes
+unclassified processes, remaining kernel allocations, and remaining page
+cache. Raw measurements for all four Lean/Lake categories remain available.
 
 The middle graph shows **average, minimum and maximum non-file memory per
 process** across the watchdogs and workers alive at each sample (not a moving
@@ -89,8 +117,9 @@ code and shared libraries; it is **not** limited to Lean-specific file
 extensions. Anonymous copy-on-write pages belong to the non-file part.
 Anonymous and shmem pages are proportionally accounted in the non-file layers.
 Unmapped file cache stays in Other RAM. Pages shared with processes outside
-Lean/Lake are split proportionally; those other processes' shares also stay in
-Other RAM. Explicit hugetlb memory not reported in PSS remains in Other RAM.
+Lean/Lake are split proportionally; recognized web processes' shares go to
+Web/editor services, and other processes' shares stay in Other RAM. Explicit
+hugetlb memory not reported in PSS remains in Other RAM.
 
 This is related to watchapus's USS + (PSS − USS) split, but directly
 identifies file-backed memory instead of treating all shared memory as a
@@ -114,14 +143,19 @@ stale-data message. Long pauses and failed samples break graph lines.
 ## Capturing logs
 
 The Node process emits newline-delimited JSON to stdout. Every completed round
-emits `event: "sample"` with `version: 2`, a Unix-millisecond `timestamp`,
+emits `event: "sample"` with `version: 3`, a Unix-millisecond `timestamp`,
 `durationMs`, `measurement`, and `error`. Successful measurements contain
-`total`, `free`, `used`, `filePss`, `other`, `vanished`, and each category's
+`total`, `free`, `used`, `filePss`, `pageTables`, `otherSystem`, `kernel`,
+`webPss`, `webGroups`, `other`, `vanished`, and each Lean/Lake category's
 `count`, `rss`, `pss`, `filePss`, `nonFilePss`, and `nonFileStats` (`average`,
 `min`, `max` in bytes, or null for an empty group). Failures have
 `measurement: null` and a diagnostic `error`; a successful sample has
-`error: null`. Startup emits `event: "listening"`. Log version 2 folds Lake
-and other Lean non-file memory into `other`; version 1 excluded it.
+`error: null`. `kernel` records primary/secondary page tables, total and
+reclaimable/unreclaimable slab, kernel stacks, and per-CPU allocations.
+`webGroups` records count, RSS, PSS and file PSS for each web/editor category.
+Startup emits `event: "listening"`. Log version 3 subtracts page tables,
+web/editor PSS and Other system from `other`. Version 2 folded Lake and other
+Lean non-file memory into `other`; version 1 excluded it.
 
 To capture clean NDJSON, invoke Node directly rather than capturing npm's
 script banners:

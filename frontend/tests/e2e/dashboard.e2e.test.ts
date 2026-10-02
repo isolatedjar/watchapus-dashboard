@@ -1,6 +1,11 @@
 import { expect, test } from "@playwright/test";
 
-import { type Measurement, type Sample } from "../../../shared/metrics.ts";
+import {
+  emptyKernel,
+  emptyWebGroups,
+  type Measurement,
+  type Sample,
+} from "../../../shared/metrics.ts";
 
 function history() {
   const now = Date.now();
@@ -32,8 +37,23 @@ function history() {
       free: 32 * scale - used,
       used,
       filePss,
+      pageTables: 2 * scale,
+      otherSystem: scale,
+      kernel: {
+        ...emptyKernel(),
+        primaryPageTables: 2 * scale,
+        slab: scale,
+        slabReclaimable: scale * 0.4,
+        slabUnreclaimable: scale * 0.6,
+      },
+      webPss: scale,
+      webGroups: {
+        ...emptyWebGroups(),
+        extensions: { count: 4, rss: scale * 1.5, pss: scale, filePss: scale * 0.1 },
+      },
       other:
         used -
+        4 * scale -
         Object.values(groups).reduce((n, g) => n + g.pss, 0) +
         groups.otherLean.nonFilePss +
         groups.lake.nonFilePss,
@@ -58,7 +78,20 @@ test("shows stacked memory, process counts and synchronized inspection", async (
   await expect(page.getByRole("heading", { name: "Lean build server" })).toBeVisible();
   await expect(page.getByText("Live", { exact: true })).toBeVisible();
   const chart = page.getByRole("img", { name: "Stacked RAM usage over the last 30 minutes" });
-  await expect(chart.locator("[data-layer]")).toHaveCount(4);
+  await expect(chart.locator("[data-layer]")).toHaveCount(7);
+  expect(
+    await chart
+      .locator("[data-layer]")
+      .evaluateAll((paths) => paths.map((p) => p.getAttribute("data-layer"))),
+  ).toEqual([
+    "Kernel page tables",
+    "File-backed · Lean + Lake",
+    "Watchdogs · non-file",
+    "File workers · non-file",
+    "Web/editor services",
+    "Other system",
+    "Other RAM + cache",
+  ]);
   const perProcess = page.getByRole("img", { name: /^Average, minimum and maximum/ });
   await expect(perProcess.locator("[data-series]")).toHaveCount(6);
   await expect(perProcess.locator('[data-series="Watchdogs · Minimum"]')).toHaveAttribute(
@@ -90,7 +123,7 @@ test("shows failed samples as gaps and reports the collection error", async ({ p
   await page.route("**/api/history", (route) => route.fulfill({ json: data }));
   await page.goto("/");
   await expect(page.getByRole("alert")).toContainText("Permission denied");
-  await expect(page.locator("[data-layer]")).toHaveCount(8);
+  await expect(page.locator("[data-layer]")).toHaveCount(14);
 });
 test("surfaces a disconnected server without displaying invented data", async ({ page }) => {
   await page.route("**/api/history", (route) =>

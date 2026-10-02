@@ -15,7 +15,7 @@ async function fixture() {
   roots.push(root);
   await writeFile(
     join(root, "meminfo"),
-    "MemTotal:       10000 kB\nMemFree:         2000 kB\nCached: 4000 kB\nSwapTotal: 9000 kB\n",
+    "MemTotal:       10000 kB\nMemFree:         2000 kB\nCached: 4000 kB\nSwapTotal: 9000 kB\nPageTables: 100 kB\nSecPageTables: 50 kB\nSlab: 300 kB\nSReclaimable: 200 kB\nSUnreclaim: 100 kB\nKernelStack: 20 kB\nPercpu: 10 kB\n",
   );
   return root;
 }
@@ -69,10 +69,15 @@ describe("Linux memory accounting", () => {
       nonFileStats: { average: 250 * 1024, min: 200 * 1024, max: 300 * 1024 },
     });
     expect(sample.filePss).toBe(1300 * 1024);
-    expect(sample.other).toBe(6000 * 1024);
+    expect(sample.other).toBe(5520 * 1024);
+    expect(sample.pageTables).toBe(150 * 1024);
+    expect(sample.otherSystem).toBe(330 * 1024);
     expect(sample.used).toBe(8000 * 1024);
     expect(
-      sample.filePss +
+      sample.pageTables +
+        sample.otherSystem +
+        sample.webPss +
+        sample.filePss +
         sample.other +
         [sample.groups.watchdog, sample.groups.worker].reduce((n, g) => n + g.nonFilePss, 0),
     ).toBe(sample.used);
@@ -90,7 +95,7 @@ describe("Linux memory accounting", () => {
     await mkdir(join(root, "42"));
     const sample = await collect(root);
     expect(sample.vanished).toBe(1);
-    expect(sample.other).toBe(sample.used);
+    expect(sample.other + sample.pageTables + sample.otherSystem).toBe(sample.used);
     expect(sample.groups.worker.nonFileStats).toBeNull();
   });
   it("fails visibly on missing accounting fields rather than inventing zero usage", async () => {
@@ -111,4 +116,72 @@ describe("Linux memory accounting", () => {
     expect(startTime(`1 (lean ) test) S ${Array(18).fill("0").join(" ")} 123456 0`)).toBe("123456");
     expect(memoryFields("Pss_File: 123 kB\n").get("Pss_File")).toBe(123 * 1024);
   });
+});
+
+it("splits web PSS and kernel allocations out of Other exactly once", async () => {
+  const root = await fixture();
+  await processFixture(root, 1, "lean", ["lean", "--worker"], 800, 500, 1500);
+  await processFixture(
+    root,
+    2,
+    "MainThread",
+    [
+      "/app/vscode-server/lib/node",
+      "/app/vscode-server/lib/vscode/out/bootstrap-fork",
+      "--type=extensionHost",
+    ],
+    300,
+    100,
+    600,
+  );
+  await processFixture(root, 3, "next-server (v1", ["next-server (v16.3.0)"], 200, 50, 350);
+  await processFixture(root, 4, "nginx", ["nginx: worker process"], 100, 50, 150);
+  await processFixture(
+    root,
+    5,
+    "bwrap",
+    ["bwrap", "--", "node", "/app/vscode-server/out/node/entry"],
+    9999,
+    9999,
+  );
+  await processFixture(root, 6, "node", ["node", "/some/app.js"], 9999, 9999);
+  const sample = await collect(root);
+  expect(sample.webPss).toBe(600 * 1024);
+  expect(sample.webGroups.extensions).toEqual({
+    count: 1,
+    pss: 300 * 1024,
+    filePss: 100 * 1024,
+    rss: 600 * 1024,
+  });
+  expect(sample.filePss).toBe(500 * 1024); // web file pages stay entirely in webPss
+  expect(sample.other).toBe((8000 - 800 - 600 - 150 - 330) * 1024);
+  expect(
+    sample.pageTables +
+      sample.filePss +
+      sample.groups.watchdog.nonFilePss +
+      sample.groups.worker.nonFilePss +
+      sample.webPss +
+      sample.otherSystem +
+      sample.other,
+  ).toBe(sample.used);
+});
+it("supports kernels without the optional secondary-page-table and per-CPU fields", async () => {
+  const root = await fixture();
+  await writeFile(
+    join(root, "meminfo"),
+    "MemTotal: 10000 kB\nMemFree: 2000 kB\nPageTables: 100 kB\nSlab: 300 kB\nSReclaimable: 200 kB\nSUnreclaim: 100 kB\nKernelStack: 20 kB\n",
+  );
+  const sample = await collect(root);
+  expect(sample.pageTables).toBe(100 * 1024);
+  expect(sample.otherSystem).toBe(320 * 1024);
+});
+it("does not fabricate an empty kernel layer when required meminfo fields are absent", async () => {
+  const root = await fixture();
+  await writeFile(join(root, "meminfo"), "MemTotal: 10000 kB\nMemFree: 2000 kB\n");
+  await expect(collect(root)).rejects.toThrow("PageTables");
+});
+it("discards samples where kernel plus process accounting exceeds total used RAM", async () => {
+  const root = await fixture();
+  await processFixture(root, 1, "lean", ["lean", "--worker"], 7900, 1000);
+  await expect(collect(root)).rejects.toThrow("exceeds used RAM");
 });

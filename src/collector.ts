@@ -1,7 +1,15 @@
 import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
-import { type Group, groups, type Measurement } from "../shared/metrics.ts";
+import {
+  emptyKernel,
+  emptyWebGroups,
+  type Group,
+  groups,
+  type Measurement,
+  webGroups,
+} from "../shared/metrics.ts";
+import { classifyWeb } from "./web-processes.ts";
 
 // Linux spells these units kB, but means KiB.
 export function memoryFields(text: string): Map<string, number> {
@@ -41,6 +49,11 @@ export async function collect(procRoot = "/proc"): Promise<Measurement> {
     free: 0,
     used: 0,
     filePss: 0,
+    pageTables: 0,
+    otherSystem: 0,
+    kernel: emptyKernel(),
+    webPss: 0,
+    webGroups: emptyWebGroups(),
     other: 0,
     vanished: 0,
     groups: {
@@ -58,12 +71,12 @@ export async function collect(procRoot = "/proc"): Promise<Measurement> {
       const dir = join(procRoot, pid);
       try {
         const comm = (await readFile(join(dir, "comm"), "utf8")).trim();
-        if (comm !== "lean" && comm !== "lake") continue;
         const before = startTime(await readFile(join(dir, "stat"), "utf8"));
         const args = (await readFile(join(dir, "cmdline"), "utf8")).split("\0").filter(Boolean);
         if (!args.length) continue; // zombies have no address space
-        if (basename(args[0]!) !== comm) continue;
-        const group = classify(comm, args)!;
+        const group = basename(args[0]!) === comm ? classify(comm, args) : null;
+        const webGroup = group === null ? classifyWeb(comm, args) : null;
+        if (group === null && webGroup === null) continue;
         const fields = memoryFields(await readFile(join(dir, "smaps_rollup"), "utf8"));
         const after = startTime(await readFile(join(dir, "stat"), "utf8"));
         if (before !== after) {
@@ -73,9 +86,18 @@ export async function collect(procRoot = "/proc"): Promise<Measurement> {
         const pss = required(fields, "Pss");
         const filePss = required(fields, "Pss_File");
         if (filePss > pss) throw new Error("Inconsistent procfs PSS fields");
-        const values = result.groups[group];
+        const rss = required(fields, "Rss");
+        if (webGroup !== null) {
+          const web = result.webGroups[webGroup];
+          web.count++;
+          web.rss += rss;
+          web.pss += pss;
+          web.filePss += filePss;
+          continue;
+        }
+        const values = result.groups[group!];
         values.count++;
-        values.rss += required(fields, "Rss");
+        values.rss += rss;
         values.pss += pss;
         values.filePss += filePss;
         const nonFile = pss - filePss;
@@ -91,7 +113,7 @@ export async function collect(procRoot = "/proc"): Promise<Measurement> {
           continue;
         }
         throw new Error(
-          `Cannot sample PID ${pid}: ${error instanceof Error ? error.message : String(error)}. Run with permission to read all Lean/Lake smaps_rollup files.`,
+          `Cannot sample PID ${pid}: ${error instanceof Error ? error.message : String(error)}. Run with permission to read all selected processes’ smaps_rollup files.`,
           { cause: error },
         );
       }
@@ -106,15 +128,39 @@ export async function collect(procRoot = "/proc"): Promise<Measurement> {
   result.total = required(mem, "MemTotal");
   result.free = required(mem, "MemFree");
   result.used = result.total - result.free;
+  result.kernel = {
+    primaryPageTables: required(mem, "PageTables"),
+    secondaryPageTables: mem.get("SecPageTables") ?? 0,
+    slab: required(mem, "Slab"),
+    slabReclaimable: required(mem, "SReclaimable"),
+    slabUnreclaimable: required(mem, "SUnreclaim"),
+    kernelStack: required(mem, "KernelStack"),
+    percpu: mem.get("Percpu") ?? 0,
+  };
+  result.pageTables = result.kernel.primaryPageTables + result.kernel.secondaryPageTables;
+  // Slab already includes both SReclaimable and SUnreclaim. VmallocUsed overlaps
+  // kernel allocations, and Buffers is file cache, so neither is added here.
+  result.otherSystem = result.kernel.slab + result.kernel.kernelStack + result.kernel.percpu;
+  result.webPss = webGroups.reduce((total, group) => total + result.webGroups[group].pss, 0);
   let processPss = 0;
   for (const group of groups) {
     result.filePss += result.groups[group].filePss;
     processPss += result.groups[group].pss;
   }
-  // Lake and other Lean file mappings remain in filePss; their non-file RAM joins Other.
+  // PSS excludes kernel page tables/slab/stacks. Each process is classified once;
+  // web-service file PSS belongs to webPss, not the Lean/Lake file-backed layer.
   result.other =
-    result.used - processPss + result.groups.otherLean.nonFilePss + result.groups.lake.nonFilePss;
-  if (processPss > result.used || result.used < 0)
-    throw new Error("Inconsistent snapshot: process PSS exceeds used RAM; sample discarded.");
+    result.used -
+    result.pageTables -
+    result.filePss -
+    result.groups.watchdog.nonFilePss -
+    result.groups.worker.nonFilePss -
+    result.webPss -
+    result.otherSystem;
+  if (
+    result.other < 0 ||
+    processPss + result.webPss + result.pageTables + result.otherSystem > result.used
+  )
+    throw new Error("Inconsistent snapshot: attributed memory exceeds used RAM; sample discarded.");
   return result;
 }
