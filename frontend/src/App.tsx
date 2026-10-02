@@ -15,6 +15,10 @@ export default function App() {
   const [selected, setSelected] = useState<Sample | undefined>();
   const [clock, setClock] = useState(() => Date.now());
   const [receivedAt, setReceivedAt] = useState(() => Date.now());
+  const banner = snapshot?.banner ?? "Connecting to host";
+  useEffect(() => {
+    document.title = banner;
+  }, [banner]);
   useEffect(() => {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
@@ -91,7 +95,7 @@ export default function App() {
   return (
     <main>
       <header>
-        <h1>{snapshot?.banner ?? "Connecting to host"}</h1>
+        <h1>{banner}</h1>
         <span className={`status ${failure ? "bad" : ""}`}>
           <i />
           {failure ? "Collection interrupted" : latest ? "Live" : "Waiting for first sample"}
