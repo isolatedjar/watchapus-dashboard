@@ -1,220 +1,137 @@
-# Sourdough
+# Watchapus dashboard
 
-This template project is part of Sourdough, a set of JavaScript templates that
-were originally developed at Northeastern for their Software Engineering class
-in spring of 2026.
+A standalone, single-port Linux host dashboard, based on the Sourdough
+`fullstack-react` starter at commit
+`3e3477ff509f18017c8daa31181fd414ea760779`. React + Vite on the frontend,
+Express on Node.js 24 on the backend. It does not need watchapus, Prometheus,
+Grafana, a database, or any external browser assets.
 
-## Vite+Express Full-stack React Application
+## Run
 
-This project has two parts:
-
-1.  A minimal Express transcript API for a very simple transcript server
-2.  A Vite frontend for a simple React application that uses the API server
-    (this lives in the `./frontend` directory)
-
-The way this project runs in "production mode" versus "development mode" is
-very different.
-
-### Production Mode
-
-Production mode is simpler: there's one server running, the Express server, on
-port 3000, accessible via the url <http://localhost:3000>. When a GET request
-doesn't match any existing API endpoints, the Express server looks in
-`./frontend/dist` to see if there's a file it can serve from that directory.
-Files are put in that directory when `npm run build` calls the `vite build`
-command.
-
-The `vite build` step is necessary because we're writing our frontend code in
-TypeScript, but browsers can't do type stripping like Node can — we have to do
-some transformation on the code we're writing to make it browser-friendly.
-(Vite is doing a bunch of other transformations for other reasons as well.)
-
-### Development Mode
-
-Development mode is a little trickier to explain. When developing, we want our
-browser to be connecting to Vite's "development web server", not to Express,
-because Vite does a lot of nifty stuff to make sure that when we change our
-TypeScript code, it **reloads the web page**. That is _very_ handy for
-frontend web development.
-
-However, this means your "frontend code" — the HTML and JS that the browser is
-supposed to run being served by the Vite development web server — is coming
-from a different server than the Express server that's handling API requests.
-The default convention is that Vite development web server is accessed via
-<http://localhost:5173>, and the Express API server is accessible via
-<http://localhost:3000>. If you try to have a website that is being served
-from a different website than the API service it is using, you're going to
-have to gain a nightmarish amount of literacy with
-[CORS](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS). (A
-different port on `localhost` counts as a different website.) This wasn't a
-problem in production mode: your entire website is coming from the Express
-server. You really want your website to look like it's _all_ coming from a
-single server during development too.
-
-The easy way to do this is to have the development server _only_ respond to
-API requests, and have the Vite development server forward all API requests to
-the Express server. This is called "proxying", and it means that you can
-access a complete Vite server from <http://localhost:5173>. (The Vite
-development server needs to know what an API request is: it's configured to
-treat every route starting with `/api` as an API endpoint.)
-
-### Express API
-
-The Express server's API has the following endpoints:
-
-| Endpoint             | Method | Description                         |
-| -------------------- | ------ | ----------------------------------- |
-| `/api/addStudent`    | POST   | Add a new student                   |
-| `/api/addGrade`      | POST   | Add a grade for an existing student |
-| `/api/getTranscript` | POST   | Look up information for a student   |
-
-## Base configuration
-
-The base project configuration follows a philosophy of "minimalism, mostly."
-Project configuration should be minimal and have a bias towards implicit
-defaults. Deviations from this principle should be justified and documented
-(here or elsewhere). The project should work on the latest long-term supported
-version of Node (this is v24 as of mid-2026).
-
-Notable exceptions to this principle:
-
-- `.gitignore` takes a kitchen-sink approach and should freely accept
-  additions. (For example, if there's some use case that results in someone
-  accidentally checking in a file that could have been ignored, it makes sense
-  to add that file here. `.stryker-tmp` is ignored in `.gitignore` and in
-  `eslint.config.mjs` for this reason.)
-
-- The ESLint configuration is a maximalist attempt at keeping new TypeScript
-  programmers on the rails in a complicated codebase, and also giving them a
-  sense of working inside style conventions of a project that may differ from
-  their own.
-
-- If we can have all project variants using the _exact_ same `tsconfig.json`
-  file or `eslint.config.mjs` file by adding a bit of cruft to the base
-  configuration, that's a reasonable trade. Things are going to inevitably get
-  copy-pasted, and so the fewer copies of configuration files there are, the
-  better. Necessary changes should be minimal, clean diffs, for example when
-  we want to have server code that can rely on node's definitions while shared
-  code cannot.
-
-  This is why the `.vscode/settings.json` applies Prettier to html and css
-  files even though that's not relevant to the base project, and why
-  `eslint.config.mjs` includes React's Rules of Hooks despite most of the
-  project variants not including any React code.
-
-### NPM Scripts
-
-This sets up a set of commands that projects should consistently support, when
-appropriate:
-
-- `npm run check` runs TypeScript
-- `npm run lint` runs ESLint, and `npm run lint:fix` runs eslint with the
-  `--fix` option
-- `npm run prettier` checks formatting, and `npm run prettier:fix` writes
-  formatted files back to disk
-- `npm run test` runs Vitest tests on the backend (and reports coverage) and
-  runs Playwright end-to-end tests to exercise the frontend and backend
-  together
-- `npm run playwright` runs the Playwright end-to-end tests with the
-  interactive Playwright UI
-- `npm run dev` starts a development server or watch process
-- `npm run build` prepares the project for production-style deployment
-- `npm start` runs the project in production mode
-
-These are tested by github actions in `.github/workflows/main.yml`.
-
-### ESLint
-
-This base project has an opinionated ESLint configuration that relies on
-[typed linting](https://typescript-eslint.io/getting-started/typed-linting).
-The ESLint configuration makes some assumptions about project structure:
-
-- Frontend code is code that lives in either `./frontend` or `./client`, and
-  optionally uses React and JSX. This code is subject to different linter
-  rules.
-- Test code lives in a `**/tests` directory OR has a `*.spec.ts(x)` or a
-  `*.test.ts(x)` filename. Tests can use devDependencies, unlike other code.
-- Config files all have `*.config.mjs` filenames (vite, vitest, playwright,
-  and eslint all can follow this convention). Config files can also import
-  devDependencies, like tests but unlike other code.
-- Most everything should be registered as `error`. Warnings don't fail CI
-  checks. Exceptions should have a documented reason. Notable exceptions where
-  we either turn on warnings or leave the warn default in place:
-  - `no-console` is `warn` because no-console regularly gets turned off by
-    line or file specific rules: we want to discourage excessive `no-console`
-    use but it is more like the admonition to not check in commented-out code:
-    it's mostly a problem when done excessively and it's easy to check in
-    visual inspection.
-  - `prettier` is `warn` because red squigglies for `prettier` are especially
-    distracting and we can check for prettier failures in CI separately.
-  - `simple-import-sort/imports` is `warn` — it's a property much like
-    prettier in that it's a mechanical fix and the red squigglies are
-    extremely distracting. It's also no huge loss if this doesn't get flagged
-    in CI.
-  - We do not override the default setting of `warn` for
-    `react-hooks/exhaustive-deps` in the default configuration. This rule
-    makes the (horrible) suggestion to remove the dependency array, and people
-    breaking their projects by blindly following that suggestion would be a
-    bad outcome.
-
-### TypeScript
-
-TypeScript is configured with options that support
-[type stripping](https://nodejs.org/api/typescript.html#type-stripping).
-Beyond this, the TypeScript configuration enables
-`noFallthroughCasesInSwitch`, `noImplicitOverride`, `noImplicitReturns`, and
-`noUncheckedIndexedAccess`, which are linter-like properties that don't seem
-to be well-supported by typed linting in ESLint.
-
-[Matt Pocock's cheat sheet](https://www.totaltypescript.com/tsconfig-cheat-sheet)
-is a reasonable source for more on minimal typescript configuration.
-
-### Prettier
-
-The `.prettierrc` file is intended to use some reasonable defaults. A
-`.vscode/settings.json` file is added to encourage Visual Studio Code to treat
-Prettier as the default formatter for javascript, typescript, json, css, and
-html files even if a students' global configuration uses other defaults.
-
-### LF Line Endings
-
-The `.prettierrc`, `.gitattributes`, and `.vscode/settings.json` files
-conspire to generally force projects to use `\n` file endings instead of
-Windows-style `\r\n` line endings (LF instead of CRLF).
-
-## Project Tree
-
-The various Sourdough starters live in a single git repository as a series of
-Git branches that build off of one another.
-
-- [`base`](https://github.com/robsimmons/sourdough/tree/base), the base
-  configuration
-- [`express`](https://github.com/robsimmons/sourdough/tree/express), adds an
-  Express server and API tests
-- [`fullstack`](https://github.com/robsimmons/sourdough/tree/fullstack), adds
-  a Vite frontend (+ Playwright end-to-end tests) for a simple client/server
-  setup
-- [`fullstack-react`](https://github.com/robsimmons/sourdough/tree/fullstack-react),
-  makes the Vite frontend use React
-- [`workspaces`](https://github.com/robsimmons/sourdough/tree/workspaces),
-  uses NPM workspaces to mediate validation and types that can be productively
-  shared between the frontend and backend
-
-## Using Sourdough as a Starter
-
-The `main` and `fullstack-react` branches should coincide, so you can use
-GitHub to fork the full-stack React project by just forking this repository.
-
-For other branches, or if you don't want to deal with the weirdness of being a
-forked GitHub project, you'll want to follow a pattern like this, replacing
-the three bits in square brackets as needed:
+Requires Node.js 24 or newer and Linux procfs exposing `smaps_rollup` with
+`Pss_File` (available on standard contemporary kernels, including Ubuntu
+26.04). Run on the host whose memory you want to measure, with access to all
+processes. Root normally supplies that access. A container's restricted PID
+namespace would not represent all host processes.
 
 ```sh
-git init
-git branch -M main
-git remote add upstream git@github.com:robsimmons/sourdough.git
-git remote add origin git@github.com:[MY_USERNAME]/[MY_PROJECT].git
-git fetch upstream
-git merge upstream/[THE_STARTER_YOU_WISH_TO_FORK]
-git push -u origin main
+npm ci
+npm run build
+sudo env PORT=3000 NODE_ENV=production node src/server.ts
 ```
+
+Open the server's address on the chosen `PORT`. The default port is 3000 and
+binding is `0.0.0.0`; set `HOST=127.0.0.1` to bind locally instead. The same
+port serves the page, bundled assets, and `GET /api/history`. There is no
+login or process-control API. The dashboard exposes aggregate host metrics.
+
+Change `SAMPLE_INTERVAL_MS` in `shared/metrics.ts` to change the 10-second
+sampling interval, then rebuild and restart. `HISTORY_MS` in the same file
+controls the rolling 30-minute window. Collection runs with no browser
+connected. Samples are held in memory and disappear on restart. Concurrent
+page-table walks are limited to eight; sampling rounds never overlap. If a
+round takes longer than the interval, the next begins when it completes.
+
+For development, `npm run dev` starts Vite and the API server; Vite proxies
+`/api` to `PORT` (default 3000). Reading other users' process mappings still
+requires appropriate permissions.
+
+## Accounting
+
+Each stacked slice totals **MemTotal − MemFree**, including page cache and
+excluding swap. All quantities in the API and logs are **bytes**, not KiB. The
+display uses GiB (2³⁰ bytes).
+
+| Layer                     | Measurement                                        |
+| ------------------------- | -------------------------------------------------- |
+| File-backed · Lean + Lake | Sum of `Pss_File` for all selected processes       |
+| Lake · non-file           | Sum of `Pss − Pss_File` for all `lake` processes   |
+| Watchdogs · non-file      | Same, for `lean --server`                          |
+| File workers · non-file   | Same, for `lean --worker`                          |
+| Other Lean · non-file     | Same, for other `lean` processes, including builds |
+| Other RAM + cache         | `MemTotal − MemFree − sum(all selected Pss)`       |
+
+`Pss_File` directly measures the proportionally attributed resident pages of
+file-backed mappings. It includes `.olean`, other Lean data files, executable
+code and shared libraries; it is **not** limited to Lean-specific file
+extensions. Anonymous copy-on-write pages belong to the non-file part.
+Anonymous and shmem pages are proportionally accounted in the non-file layers.
+Unmapped file cache stays in Other RAM. Pages shared with processes outside
+Lean/Lake are split proportionally; those other processes' shares also stay in
+Other RAM. Explicit hugetlb memory not reported in PSS remains in Other RAM.
+
+This is related to watchapus's USS + (PSS − USS) split, but directly
+identifies file-backed memory instead of treating all shared memory as a
+proxy. RSS is recorded for every category and shown in the expandable table;
+it is never added to the stack because that would double-count shared pages.
+
+Selection uses `/proc/PID/comm` (`lean` or `lake`) and the basename of
+argv[0]. Role flags are matched as complete arguments before `--`. All users
+and all Lake invocations are included; workers need not have a live watchdog
+parent. Processes renamed away from these executable names are not selected.
+
+Procfs is not an atomic snapshot. Processes can start, exit, exec, or change
+mappings while scanned. Start times detect PID reuse, disappearing processes
+are skipped, and their number is recorded as `vanished`. PSS is rounded by the
+kernel to KiB. These introduce small sampling inaccuracies; the stack still
+sums exactly to the sampled used-RAM total. An impossible negative residual or
+a permission/accounting error produces a gap and an error log, not a
+fabricated zero. No new samples for 2.5 sampling intervals triggers a
+stale-data message. Long pauses and failed samples break graph lines.
+
+## Capturing logs
+
+The Node process emits newline-delimited JSON to stdout. Every completed round
+emits `event: "sample"` with `version: 1`, a Unix-millisecond `timestamp`,
+`durationMs`, `measurement`, and `error`. Successful measurements contain
+`total`, `free`, `used`, `filePss`, `other`, `vanished`, and each category's
+`count`, `rss`, `pss`, `filePss`, and `nonFilePss`. Failures have
+`measurement: null` and a diagnostic `error`; a successful sample has
+`error: null`. Startup emits `event: "listening"`.
+
+To capture clean NDJSON, invoke Node directly rather than capturing npm's
+script banners:
+
+```sh
+sudo env PORT=3000 NODE_ENV=production node src/server.ts >> samples.ndjson
+```
+
+Under systemd, stdout goes to journald. `deploy/watchapus-dashboard.service`
+is an example unit for an installation at `/opt/watchapus-dashboard`:
+
+```sh
+sudo cp deploy/watchapus-dashboard.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now watchapus-dashboard
+journalctl -u watchapus-dashboard -o cat --since '30 minutes ago' \
+  | jq -Rc 'fromjson? | select(.event == "sample")' > samples.ndjson
+```
+
+Edit the unit's `PORT`, paths and Node executable for your installation.
+Journald's retention policy controls how long logs survive. The app itself
+neither rotates logs nor reads them back into history.
+
+## Verification
+
+```sh
+npm run check
+npm run lint
+npm run prettier
+npm run test:server
+npm run test:frontend
+```
+
+Playwright requires its Chromium browser installed
+(`npx playwright install --with-deps chromium`). Browser tests build and
+launch the production single-port app on loopback port 3187, then exercise
+graphs, hover inspection, mobile layout, collection failures, connection
+failures, and the real API. Backend tests cover proportional sharing,
+categories, process exits, invalid accounting, history retention,
+failures/recovery, and non-overlapping scans.
+
+The implementation was additionally checked against the live Linux kernel
+using two synthetic `lean --worker` processes, each with 64 MiB anonymous
+memory and the same 32 MiB mapped file: aggregate file PSS was about 32 MiB,
+non-file PSS about 128 MiB, and raw RSS about 194 MiB. This validates that the
+shared file is not counted twice. This is a kernel accounting test, not a
+benchmark of real Lean workloads or of a heavily loaded Ubuntu host.

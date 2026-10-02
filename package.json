@@ -1,5 +1,5 @@
 {
-  "name": "sourdough",
+  "name": "watchapus-dashboard",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
@@ -52,5 +52,9 @@
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "zod": "^4.3.6"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=24.0.0"
   }
 }

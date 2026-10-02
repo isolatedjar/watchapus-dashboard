@@ -1,0 +1,87 @@
+import { expect, test } from "@playwright/test";
+
+import { type Measurement, type Sample } from "../../../shared/metrics.ts";
+
+function history() {
+  const now = Date.now();
+  const samples: Sample[] = Array.from({ length: 181 }, (_, i) => {
+    const worker = 8 + Math.round(4 * Math.sin(i / 16));
+    const scale = 2 ** 30;
+    const group = (count: number, pss: number, file: number) => ({
+      count,
+      pss: pss * scale,
+      filePss: file * scale,
+      nonFilePss: (pss - file) * scale,
+      rss: pss * scale * 1.7,
+    });
+    const groups = {
+      lake: group(3, 0.5, 0.2),
+      watchdog: group(4, 2, 0.8),
+      worker: group(worker, 8 + 2 * Math.sin(i / 14), 3),
+      otherLean: group(2, 1, 0.2),
+    };
+    const filePss = Object.values(groups).reduce((n, g) => n + g.filePss, 0);
+    const used = (23 + Math.sin(i / 20) * 3) * scale;
+    const measurement: Measurement = {
+      total: 32 * scale,
+      free: 32 * scale - used,
+      used,
+      filePss,
+      other: used - Object.values(groups).reduce((n, g) => n + g.pss, 0),
+      groups,
+      vanished: 0,
+    };
+    return { timestamp: now - (180 - i) * 10000, durationMs: 35, measurement, error: null };
+  });
+  return {
+    hostname: "lean-host",
+    now,
+    startedAt: now - 1800000,
+    sampleIntervalMs: 10000,
+    historyMs: 1800000,
+    samples,
+  };
+}
+test("shows stacked memory, process counts and synchronized inspection", async ({ page }) => {
+  await page.route("**/api/history", (route) => route.fulfill({ json: history() }));
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Memory, in perspective." })).toBeVisible();
+  await expect(page.getByText("Live", { exact: true })).toBeVisible();
+  const chart = page.getByRole("img", { name: "Stacked RAM usage over the last 30 minutes" });
+  await expect(chart.locator("[data-layer]")).toHaveCount(6);
+  await chart.hover({ position: { x: 400, y: 100 } });
+  await expect(page.getByText(/^Inspecting/)).toBeVisible();
+  await expect(page.locator(".crosshair")).toHaveCount(2);
+  await page.getByText("Memory accounting & raw process measurements").click();
+  await expect(page.getByRole("columnheader", { name: "RSS", exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("heading", { name: "Physical memory" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+});
+test("shows failed samples as gaps and reports the collection error", async ({ page }) => {
+  const data = history();
+  data.samples[80] = { ...data.samples[80]!, measurement: null, error: "Permission denied" };
+  data.samples[180] = { ...data.samples[180]!, measurement: null, error: "Permission denied" };
+  await page.route("**/api/history", (route) => route.fulfill({ json: data }));
+  await page.goto("/");
+  await expect(page.getByRole("alert")).toContainText("Permission denied");
+  await expect(page.locator("[data-layer]")).toHaveCount(12);
+});
+test("surfaces a disconnected server without displaying invented data", async ({ page }) => {
+  await page.route("**/api/history", (route) =>
+    route.fulfill({ status: 503, body: "Unavailable" }),
+  );
+  await page.goto("/");
+  await expect(page.getByRole("alert")).toContainText("HTTP 503");
+  await expect(page.locator("[data-layer]")).toHaveCount(0);
+});
+test("production port serves the SPA and a live procfs sample", async ({ page, request }) => {
+  const response = await request.get("/api/history");
+  expect(response.ok()).toBe(true);
+  const data = await response.json();
+  expect(data.sampleIntervalMs).toBe(10000);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Physical memory" })).toBeVisible();
+});
