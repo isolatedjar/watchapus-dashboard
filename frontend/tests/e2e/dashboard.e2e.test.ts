@@ -88,11 +88,11 @@ test("shows stacked memory, process counts and synchronized inspection", async (
       .locator("[data-layer]")
       .evaluateAll((paths) => paths.map((p) => p.getAttribute("data-layer"))),
   ).toEqual([
-    "Kernel page tables",
-    "Other system",
     "File-backed · Lean + Lake",
     "Watchdogs · non-file",
     "File workers · non-file",
+    "Kernel page tables",
+    "Other system",
     "Other parts of Workbench",
     "Other RAM + cache",
   ]);

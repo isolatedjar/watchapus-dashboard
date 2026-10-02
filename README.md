@@ -68,11 +68,11 @@ Layers are listed from the bottom of the stack upward:
 
 | Layer                     | Measurement                                       |
 | ------------------------- | ------------------------------------------------- |
-| Kernel page tables        | Host `PageTables + SecPageTables`                 |
-| Other system              | Host `Slab + KernelStack + Percpu`                |
 | File-backed · Lean + Lake | Sum of `Pss_File` for all Lean and Lake processes |
 | Watchdogs · non-file      | Sum of `Pss − Pss_File` for `lean --server`       |
 | File workers · non-file   | Sum of `Pss − Pss_File` for `lean --worker`       |
+| Kernel page tables        | Host `PageTables + SecPageTables`                 |
+| Other system              | Host `Slab + KernelStack + Percpu`                |
 | Other parts of Workbench  | Full PSS of recognized web/editor processes       |
 | Other RAM + cache         | `MemTotal − MemFree` minus the six layers above   |
 
