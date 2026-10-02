@@ -20,10 +20,12 @@ npm run build
 sudo env PORT=3000 NODE_ENV=production node src/server.ts
 ```
 
-Open the server's address on the chosen `PORT`. The default port is 3000 and
-binding is `0.0.0.0`; set `HOST=127.0.0.1` to bind locally instead. The same
-port serves the page, bundled assets, and `GET /api/history`. There is no
-login or process-control API. The dashboard exposes aggregate host metrics.
+Open `http://127.0.0.1:3000` locally, using the chosen `PORT`, or access it
+through Nginx as described below. The default port is 3000 and the server
+binds to `127.0.0.1` (loopback only). Set `HOST` explicitly to override the
+bind address. The same port serves the page, bundled assets, and
+`GET /api/history`. There is no login or process-control API. The dashboard
+exposes aggregate host metrics.
 
 The heading and browser tab title use `WD_BANNER` when set, otherwise `HOST`
 when set, otherwise the system hostname. Set `WD_BANNER="Lean build server"`

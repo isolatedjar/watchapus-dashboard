@@ -6,7 +6,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535)
   throw new Error("PORT must be an integer from 1 to 65535");
 const monitor = new Monitor();
 const app = createApp(monitor, process.env.NODE_ENV === "production");
-const server = app.listen(port, process.env.HOST ?? "0.0.0.0", () => {
+const server = app.listen(port, process.env.HOST ?? "127.0.0.1", () => {
   process.stdout.write(`${JSON.stringify({ version: 6, event: "listening", port })}\n`);
   monitor.start();
 });
